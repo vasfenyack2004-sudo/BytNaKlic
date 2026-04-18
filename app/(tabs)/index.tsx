@@ -40,7 +40,7 @@ import { auth, db } from '../../firebaseConfig';
 // Пакет для сповіщень
 import emailjs from '@emailjs/browser';
 
-// Ініціалізація EmailJS твоїм новим ключем
+// Ініціалізація EmailJS твоїм ключем
 emailjs.init("klUWyK6E3q0jVSWat");
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -210,10 +210,9 @@ export default function App() {
 
   return (
     <ImageBackground 
-      // ОНОВЛЕНО: Посилання на темну цегляну стіну
       source={{ uri: 'https://images.unsplash.com/photo-1585314062340-f1a5a7c9328d?q=80&w=1000&auto=format&fit=crop' }} 
       style={styles.backgroundImage}
-      imageStyle={{ opacity: 0.5 }}
+      imageStyle={{ opacity: 0.9 }} // Робимо цеглу світлішою (майже повністю прозорий фон)
     >
       <View style={styles.darkOverlay}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{flex: 1}}>
@@ -344,7 +343,31 @@ export default function App() {
                     </View>
                     <Text style={styles.infoLabel}>POPIS:</Text><Text style={styles.modalDesc}>{selectedOrder.description}</Text>
                     <Text style={styles.infoLabel}>KONTAKTNÍ EMAIL:</Text><Text style={styles.modalDesc}>{maskContact(selectedOrder.email || "neuvedeno", 'email')}</Text>
-                    <TouchableOpacity style={[styles.callBtn, (!currentUser || !isProfileComplete()) && {backgroundColor: '#222'}]} onPress={() => { if(!currentUser) return setView('AUTH'); if(!isProfileComplete()) return setView('PROFILE'); Alert.alert("Kontakt", selectedOrder.phone); }}>
+                    
+                    {/* КНОПКА ВИКЛИКУ З ЛОГІКОЮ ДЛЯ ГІСТЯ */}
+                    <TouchableOpacity 
+                      style={[styles.callBtn, (!currentUser || !isProfileComplete()) && {backgroundColor: '#222'}]} 
+                      onPress={() => { 
+                        if(!currentUser) {
+                          Alert.alert(
+                            "Nutná registrace",
+                            "Pro zobrazení kontaktu se musíte nejdříve přihlásit nebo zaregistrovat.",
+                            [
+                              { text: "Zavřít", style: "cancel" },
+                              { text: "Přihlásit se", onPress: () => { setSelectedOrder(null); setView('AUTH'); } }
+                            ]
+                          );
+                          return;
+                        } 
+                        if(!isProfileComplete()) {
+                          Alert.alert("Profil není kompletní", "Pro zobrazení kontaktu musíte vyplnit svůj profil.");
+                          setView('PROFILE');
+                          setSelectedOrder(null);
+                          return;
+                        } 
+                        Alert.alert("Kontakt", "Telefon: " + selectedOrder.phone); 
+                      }}
+                    >
                       <Ionicons name="call" size={20} color={(currentUser && isProfileComplete()) ? "#000" : "#555"} />
                       <Text style={[styles.callBtnText, (!currentUser || !isProfileComplete()) && {color: '#555'}]}>{maskContact(selectedOrder.phone, 'phone')}</Text>
                     </TouchableOpacity>
@@ -372,7 +395,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   backgroundImage: { flex: 1, backgroundColor: '#000' },
-  darkOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.55)' }, // Трохи затемнив для кращої читабельності
+  darkOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.25)' }, // Робимо затемнення ще легшим
   header: { paddingTop: 60, paddingHorizontal: 25, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 100 },
   logo: { fontSize: 22, fontWeight: '900', color: '#FFF' },
   profileBtn: { padding: 10, backgroundColor: 'rgba(20, 20, 20, 0.9)', borderRadius: 12, borderWidth: 1, borderColor: '#444' },
