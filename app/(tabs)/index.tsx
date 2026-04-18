@@ -47,6 +47,7 @@ interface Poptavka {
   id: string; title: string; description: string;
   price: string; phone: string; email?: string;
   categories: string[]; createdAt: any; views: number;
+  status?: 'PENDING' | 'APPROVED'; // ДОДАНО СТАТУС
 }
 
 export default function App() {
@@ -154,37 +155,39 @@ export default function App() {
   const handleSubmitOrder = async () => {
     if (!title || !phone || selectedCats.length === 0) return Alert.alert("Pozor", "Doplňte název, telefon a kategorii.");
     setLoading(true);
+    
+    // Якщо створює адмін - одразу APPROVED, якщо клієнт - PENDING
+    const initialStatus = currentUser?.email === ADMIN_EMAIL ? 'APPROVED' : 'PENDING';
+    
     try {
       await addDoc(collection(db, "poptavky"), {
         title, description: desc, price, phone, email: emailOrder || "neuvedeno",
-        categories: selectedCats, createdAt: new Date(), views: 0 
+        categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus 
       });
       setTitle(''); setDesc(''); setPrice(''); setPhone(''); setEmailOrder(''); setSelectedCats([]);
-      setIsFormExpanded(false); Alert.alert("Hotovo", "Zakázka byla odeslána.");
+      setIsFormExpanded(false); 
+      
+      if (initialStatus === 'APPROVED') {
+         Alert.alert("Hotovo", "Zakázka byla publikována.");
+      } else {
+         Alert.alert("Odesláno", "Zakázka byla odeslána a čeká na schválení administrátorem.");
+      }
     } catch (e) { Alert.alert("Chyba", "Odeslání selhalo."); }
     finally { setLoading(false); }
   };
 
-  // Компонент футера для повторного використання
   const Footer = () => (
     <View style={styles.footerContainer}>
       <View style={styles.footerDivider} />
       <Text style={styles.footerText}>
         © 2026 <Text style={{color: '#FFD700'}}>BytNaKlič</Text>. Premium Servis v ČR.
       </Text>
-      <Text style={styles.footerText}>
-        Všechna práva vyhrazena.
-      </Text>
-      <View style={styles.footerLinksRow}>
-        <TouchableOpacity style={styles.footerLinkItem} onPress={() => Alert.alert("Podmínky", "Uživatelské podmínky.")}>
-          <Text style={styles.footerLinkText}>Uživatelské podmínky</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.footerLinkItem} onPress={() => Alert.alert("GDPR", "Zásady ochrany údajů.")}>
-          <Text style={styles.footerLinkText}>Ochrana údajů</Text>
-        </TouchableOpacity>
-      </View>
+      <Text style={styles.footerText}>Všechna práva vyhrazena.</Text>
     </View>
   );
+
+  // ФІЛЬТРАЦІЯ: Показуємо тільки схвалені, або ВСІ, якщо ти Адмін
+  const visibleOrders = orders.filter(o => o.status === 'APPROVED' || currentUser?.email === ADMIN_EMAIL);
 
   return (
     <ImageBackground 
@@ -248,21 +251,26 @@ export default function App() {
                 </View>
 
                 <View style={styles.statsContainer}>
-                   <View style={styles.statBox}><Text style={styles.statLabel}>Týden</Text><Text style={styles.statValue}>{orders.filter(o => (Date.now() - o.createdAt?.seconds*1000) < 604800000).length}</Text></View>
-                   <View style={[styles.statBox, {borderLeftWidth:1, borderRightWidth:1, borderColor:'#444'}]}><Text style={styles.statLabel}>Měsíc</Text><Text style={styles.statValue}>{orders.filter(o => (Date.now() - o.createdAt?.seconds*1000) < 2592000000).length}</Text></View>
-                   <View style={styles.statBox}><Text style={styles.statLabel}>Celkem</Text><Text style={styles.statValue}>{orders.length}</Text></View>
+                   <View style={styles.statBox}><Text style={styles.statLabel}>Týden</Text><Text style={styles.statValue}>{visibleOrders.filter(o => (Date.now() - o.createdAt?.seconds*1000) < 604800000).length}</Text></View>
+                   <View style={[styles.statBox, {borderLeftWidth:1, borderRightWidth:1, borderColor:'#444'}]}><Text style={styles.statLabel}>Měsíc</Text><Text style={styles.statValue}>{visibleOrders.filter(o => (Date.now() - o.createdAt?.seconds*1000) < 2592000000).length}</Text></View>
+                   <View style={styles.statBox}><Text style={styles.statLabel}>Celkem</Text><Text style={styles.statValue}>{visibleOrders.length}</Text></View>
                 </View>
 
                 <View style={styles.listSection}>
                   <Text style={styles.sectionTitle}>Správa zakázek</Text>
-                  {orders.map((item) => (
+                  {visibleOrders.map((item) => (
                     <TouchableOpacity key={item.id} style={styles.orderCard} onPress={() => handleOpenOrder(item)}>
-                      <View style={styles.orderHeader}><Text style={styles.orderCats}>{item.categories[0]}</Text><View style={styles.viewsBadge}><Ionicons name="eye-outline" size={14} color="#00BFFF" /><Text style={styles.viewsText}>{item.views || 0}</Text></View></View>
+                      <View style={styles.orderHeader}>
+                        <Text style={styles.orderCats}>{item.categories[0]}</Text>
+                        <View style={{flexDirection: 'row', gap: 10}}>
+                          {item.status !== 'APPROVED' && <Text style={{color: '#FFA500', fontSize: 10, fontWeight: 'bold'}}>⏳ ČEKÁ</Text>}
+                          <View style={styles.viewsBadge}><Ionicons name="eye-outline" size={14} color="#00BFFF" /><Text style={styles.viewsText}>{item.views || 0}</Text></View>
+                        </View>
+                      </View>
                       <Text style={styles.orderTitle}>{item.title}</Text><Text style={styles.orderPrice}>{item.price} Kč</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
-                {/* Додаємо футер у кінець сторінки */}
                 <Footer />
               </>
             )}
@@ -284,7 +292,6 @@ export default function App() {
                     <TouchableOpacity onPress={() => setAuthMode(authMode === 'LOGIN' ? 'REGISTER' : 'LOGIN')} style={{marginTop: 20}}><Text style={{color: '#FFD700', textAlign: 'center'}}>Změnit na {authMode === 'LOGIN' ? 'Registraci' : 'Přihlášení'}</Text></TouchableOpacity>
                   </View>
                 </View>
-                {/* Додаємо футер для авторизації */}
                 <Footer />
               </ScrollView>
             )}
@@ -298,7 +305,6 @@ export default function App() {
                     <TouchableOpacity style={styles.goldBtn} onPress={handleSaveProfile}><Text style={styles.goldBtnText}>ULOŽIT ZMĚNY</Text></TouchableOpacity>
                     <TouchableOpacity onPress={() => setView('FORM')} style={{marginTop: 20}}><Text style={{color: '#CCC', textAlign: 'center'}}>Zpět na hlavní panel</Text></TouchableOpacity>
                  </View>
-                 {/* Додаємо футер для профілю */}
                  <Footer />
                </>
             )}
@@ -308,6 +314,7 @@ export default function App() {
             <View style={styles.modalOverlay}><View style={styles.modalContent}>
                 <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedOrder(null)}><Ionicons name="close" size={28} color="#FFD700" /></TouchableOpacity>
                 {selectedOrder && (<ScrollView showsVerticalScrollIndicator={false}>
+                    {selectedOrder.status !== 'APPROVED' && <Text style={{color: '#FFA500', fontWeight: 'bold', marginBottom: 10}}>⚠️ Tato zakázka čeká na schválení</Text>}
                     <Text style={styles.modalCats}>{selectedOrder.categories.join(' • ')}</Text>
                     <Text style={styles.modalTitle}>{selectedOrder.title}</Text>
                     <View style={styles.modalInfoRow}>
@@ -320,7 +327,29 @@ export default function App() {
                       <Ionicons name="call" size={20} color={(currentUser && isProfileComplete()) ? "#000" : "#555"} />
                       <Text style={[styles.callBtnText, (!currentUser || !isProfileComplete()) && {color: '#555'}]}>{maskContact(selectedOrder.phone, 'phone')}</Text>
                     </TouchableOpacity>
-                    {currentUser?.email === ADMIN_EMAIL && <TouchableOpacity style={styles.deleteBtn} onPress={async()=>{await deleteDoc(doc(db,"poptavky",selectedOrder.id)); setSelectedOrder(null);}}><Text style={{color:'#FF4444', fontWeight:'bold', textAlign:'center'}}>Odstranit tuto zakázku</Text></TouchableOpacity>}
+                    
+                    {/* КНОПКИ АДМІНІСТРАТОРА */}
+                    {currentUser?.email === ADMIN_EMAIL && (
+                      <View style={{marginTop: 30, gap: 15}}>
+                        {selectedOrder.status !== 'APPROVED' && (
+                          <TouchableOpacity 
+                            style={[styles.callBtn, {backgroundColor: '#00BFFF'}]} 
+                            onPress={async()=>{
+                              await updateDoc(doc(db,"poptavky",selectedOrder.id), {status: 'APPROVED'}); 
+                              setSelectedOrder(null);
+                              Alert.alert("Schváleno", "Zakázka je nyní veřejná.");
+                            }}>
+                            <Ionicons name="checkmark-circle-outline" size={20} color="#000" />
+                            <Text style={styles.callBtnText}>Schválit a publikovat</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity 
+                          style={{padding: 15, borderWidth: 1, borderColor: '#FF4444', borderRadius: 15, alignItems: 'center'}} 
+                          onPress={async()=>{await deleteDoc(doc(db,"poptavky",selectedOrder.id)); setSelectedOrder(null);}}>
+                          <Text style={{color:'#FF4444', fontWeight:'bold'}}>Smazat zakázku</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </ScrollView>)}
             </View></View>
           </Modal>
@@ -386,35 +415,7 @@ const styles = StyleSheet.create({
   modalDesc: { color: '#CCC', fontSize: 16, lineHeight: 24, marginBottom: 20 },
   callBtn: { backgroundColor: '#FFD700', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 18, borderRadius: 15, gap: 10 },
   callBtnText: { color: '#000', fontWeight: 'bold', fontSize: 16 },
-  deleteBtn: { marginTop: 30, padding: 15 },
-  // НОВІ СТИЛІ ДЛЯ ФУТЕРА
-  footerContainer: {
-    marginTop: 40,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-  },
-  footerDivider: {
-    width: '40%',
-    height: 1,
-    backgroundColor: '#FFD700',
-    marginBottom: 20,
-  },
-  footerText: {
-    color: '#888',
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  footerLinksRow: {
-    flexDirection: 'row',
-    marginTop: 15,
-    gap: 15,
-  },
-  footerLinkItem: {},
-  footerLinkText: {
-    color: '#FFD700',
-    fontSize: 12,
-    textDecorationLine: 'underline',
-  },
+  footerContainer: { marginTop: 40, paddingBottom: 20, paddingHorizontal: 20, alignItems: 'center' },
+  footerDivider: { width: '40%', height: 1, backgroundColor: '#FFD700', marginBottom: 20 },
+  footerText: { color: '#888', fontSize: 12, textAlign: 'center', lineHeight: 18 }
 });
