@@ -40,6 +40,9 @@ import { auth, db } from '../../firebaseConfig';
 // Пакет для сповіщень
 import emailjs from '@emailjs/browser';
 
+// КРИТИЧНО: Ініціалізація на самому верху поза компонентом
+emailjs.init("Plwz8uPyle__rci_b");
+
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
@@ -64,17 +67,14 @@ export default function App() {
   const [orders, setOrders] = useState<Poptavka[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Poptavka | null>(null);
   
-  // Auth fields
   const [emailAuth, setEmailAuth] = useState('');
   const [passwordAuth, setPasswordAuth] = useState('');
   const [registerRole, setRegisterRole] = useState<'MASTER' | 'CLIENT'>('MASTER');
   const [regIco, setRegIco] = useState('');
   
-  // Profile fields
   const [profileIco, setProfileIco] = useState('');
   const [birthYear, setBirthYear] = useState('');
 
-  // Form fields
   const [selectedCats, setSelectedCats] = useState<string[]>([]);
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
@@ -85,9 +85,6 @@ export default function App() {
   const CATEGORIES = ['ZEDNÍK', 'MALÍŘ', 'STAVEBNÍK', 'ELEKTRIKÁŘ', 'INSTALATÉR', 'PODLAHÁŘ', 'ÚKLID', 'ZAHRADA', 'STĚHOVÁNÍ'];
 
   useEffect(() => {
-    // Важливо: Ініціалізація EmailJS твоїм ключем
-    emailjs.init("Plwz8uPyle__rci_b");
-
     const unsubAuth = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       if (user) {
@@ -165,30 +162,30 @@ export default function App() {
     const initialStatus = currentUser?.email === ADMIN_EMAIL ? 'APPROVED' : 'PENDING';
     
     try {
-      // 1. ЗАПИСУЄМО В FIREBASE
+      // 1. Спочатку Firebase
       await addDoc(collection(db, "poptavky"), {
         title, description: desc, price, phone, email: emailOrder || "neuvedeno",
         categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus 
       });
 
-      // 2. ВІДПРАВЛЯЄМО ЛИСТ (з діагностикою)
+      // 2. Відправка листа (Тільки для PENDING)
       if (initialStatus === 'PENDING') {
-        emailjs.send(
-          'service_9flz7xf', 
-          'template_dsxyb8h', 
-          { 
-            title: title, 
-            phone: phone, 
-            desc: desc || "Bez popisu",
-            email: emailOrder || "neuvedeno"
-          }, 
-          'Plwz8uPyle__rci_b'
-        )
-        .then((res) => console.log('Email sent!', res.status))
-        .catch((err) => {
-          console.error('Email failed:', err);
-          Alert.alert("Email Error", "Zakázka uložena, ale admin nedostal email.");
-        });
+        try {
+          await emailjs.send(
+            'service_9flz7xf', 
+            'template_dsxyb8h', 
+            { 
+              title: title, 
+              phone: phone, 
+              desc: desc || "Bez popisu",
+              email: emailOrder || "neuvedeno"
+            }
+          );
+          console.log('EMAIL SENT SUCCESS ✅');
+        } catch (mailErr: any) {
+          console.error('MAIL FAIL ❌', mailErr);
+          Alert.alert("Email Error", "Zakázka uložena, ale admin nedostal email. Status: " + mailErr.status);
+        }
       }
 
       setTitle(''); setDesc(''); setPrice(''); setPhone(''); setEmailOrder(''); setSelectedCats([]);
