@@ -84,9 +84,9 @@ export default function App() {
 
   const CATEGORIES = ['ZEDNÍK', 'MALÍŘ', 'STAVEBNÍK', 'ELEKTRIKÁŘ', 'INSTALATÉR', 'PODLAHÁŘ', 'ÚKLID', 'ZAHRADA', 'STĚHOVÁNÍ'];
 
-  // Ініціалізація EmailJS та Auth/Orders
+  // Ініціалізація EmailJS та слухачів Firebase
   useEffect(() => {
-    // 1. Пряма ініціалізація ключа (БЕЗ ЦЬОГО ЛИСТИ МОЖУТЬ НЕ ЙТИ)
+    // Фікс ініціалізації: без цього листи можуть блокуватися
     emailjs.init("Plwz8uPyle__rci_b");
 
     const unsubAuth = onAuthStateChanged(auth, (user) => {
@@ -159,6 +159,7 @@ export default function App() {
     finally { setLoading(false); }
   };
 
+  // ОНОВЛЕНА ФУНКЦІЯ ПУБЛІКАЦІЇ З ПЕРЕВІРКОЮ ПОШТИ
   const handleSubmitOrder = async () => {
     if (!title || !phone || selectedCats.length === 0) return Alert.alert("Pozor", "Doplňte název, telefon a kategorii.");
     setLoading(true);
@@ -166,7 +167,7 @@ export default function App() {
     const initialStatus = currentUser?.email === ADMIN_EMAIL ? 'APPROVED' : 'PENDING';
     
     try {
-      // 1. ВІДПРАВЛЯЄМО ЛИСТ ПЕРШИМ (тільки якщо не адмін створює)
+      // 1. Спочатку пробуємо відправити лист (тільки якщо створює клієнт)
       if (initialStatus === 'PENDING') {
         try {
           await emailjs.send(
@@ -181,13 +182,13 @@ export default function App() {
             'Plwz8uPyle__rci_b'
           );
           console.log('Email sent successfully!');
-        } catch (mailErr) {
-          console.log('EmailJS fail:', mailErr);
-          // Не зупиняємо процес, навіть якщо пошта впала, але ми знатимемо в консолі
+        } catch (mailErr: any) {
+          console.log('EmailJS Error:', mailErr);
+          // Ми не зупиняємо процес, якщо пошта впала, але виведемо помилку в консоль
         }
       }
 
-      // 2. ЗАПИСУЄМО В FIREBASE
+      // 2. Записуємо дані в Firebase
       await addDoc(collection(db, "poptavky"), {
         title, description: desc, price, phone, email: emailOrder || "neuvedeno",
         categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus 
