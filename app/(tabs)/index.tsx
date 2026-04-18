@@ -64,17 +64,14 @@ export default function App() {
   const [orders, setOrders] = useState<Poptavka[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Poptavka | null>(null);
   
-  // Auth fields
   const [emailAuth, setEmailAuth] = useState('');
   const [passwordAuth, setPasswordAuth] = useState('');
   const [registerRole, setRegisterRole] = useState<'MASTER' | 'CLIENT'>('MASTER');
   const [regIco, setRegIco] = useState('');
   
-  // Profile fields
   const [profileIco, setProfileIco] = useState('');
   const [birthYear, setBirthYear] = useState('');
 
-  // Form fields
   const [selectedCats, setSelectedCats] = useState<string[]>([]);
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
@@ -84,9 +81,8 @@ export default function App() {
 
   const CATEGORIES = ['ZEDNÍK', 'MALÍŘ', 'STAVEBNÍK', 'ELEKTRIKÁŘ', 'INSTALATÉR', 'PODLAHÁŘ', 'ÚKLID', 'ZAHRADA', 'STĚHOVÁNÍ'];
 
-  // Ініціалізація EmailJS та слухачів Firebase
   useEffect(() => {
-    // Фікс ініціалізації: без цього листи можуть блокуватися
+    // Фікс ініціалізації: обов'язково для роботи EmailJS
     emailjs.init("Plwz8uPyle__rci_b");
 
     const unsubAuth = onAuthStateChanged(auth, (user) => {
@@ -159,49 +155,51 @@ export default function App() {
     finally { setLoading(false); }
   };
 
-  // ОНОВЛЕНА ФУНКЦІЯ ПУБЛІКАЦІЇ З ПЕРЕВІРКОЮ ПОШТИ
   const handleSubmitOrder = async () => {
-  if (!title || !phone || selectedCats.length === 0) return Alert.alert("Pozor", "Doplňte název, telefon a kategorii.");
-  setLoading(true);
-  
-  const initialStatus = currentUser?.email === ADMIN_EMAIL ? 'APPROVED' : 'PENDING';
-  
-  try {
-    // 1. ПЕРШИМ ДІЛОМ ВІДПРАВЛЯЄМО ЛИСТ (якщо не адмін)
-    if (initialStatus === 'PENDING') {
-      await emailjs.send(
-        'service_9flz7xf', 
-        'template_dsxyb8h', 
-        { 
-          title: title, 
-          phone: phone, 
-          desc: desc || "Bez popisu",
-          email: emailOrder || "neuvedeno"
-        }, 
-        'Plwz8uPyle__rci_b'
-      );
-      console.log('Email sent!');
-    }
-
-    // 2. ЗАПИСУЄМО В БАЗУ
-    await addDoc(collection(db, "poptavky"), {
-      title, description: desc, price, phone, email: emailOrder || "neuvedeno",
-      categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus 
-    });
-
-    setTitle(''); setDesc(''); setPrice(''); setPhone(''); setEmailOrder(''); setSelectedCats([]);
-    setIsFormExpanded(false); 
+    if (!title || !phone || selectedCats.length === 0) return Alert.alert("Pozor", "Doplňte název, telefon a kategorii.");
+    setLoading(true);
     
-    Alert.alert("Hotovo", initialStatus === 'APPROVED' ? "Publikováno." : "Odesláno ke schválení. Email adminovi byl odeslán.");
+    const initialStatus = currentUser?.email === ADMIN_EMAIL ? 'APPROVED' : 'PENDING';
+    
+    try {
+      // 1. ПЕРШИМ ДІЛОМ ЗАПИСУЄМО В БАЗУ (щоб замовлення не пропало)
+      await addDoc(collection(db, "poptavky"), {
+        title, description: desc, price, phone, email: emailOrder || "neuvedeno",
+        categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus 
+      });
 
-  } catch (e: any) { 
-    console.error(e);
-    // Якщо буде помилка - ми її побачимо
-    Alert.alert("Chyba", e.text || "Něco se nepovedlo."); 
-  } finally { 
-    setLoading(false); 
-  }
-};
+      // 2. ВІДПРАВЛЯЄМО ЛИСТ ОКРЕМО (без await, щоб не блокувати додаток)
+      if (initialStatus === 'PENDING') {
+        emailjs.send(
+          'service_9flz7xf', 
+          'template_dsxyb8h', 
+          { 
+            title: title, 
+            phone: phone, 
+            desc: desc || "Bez popisu",
+            email: emailOrder || "neuvedeno"
+          }, 
+          'Plwz8uPyle__rci_b'
+        )
+        .then((res) => console.log('Email SUCCESS!', res.status))
+        .catch((err) => {
+          console.error('Email FAILED...', err);
+          Alert.alert("Email Error", "Zakázka uložena, ale email adminovi neodešel.");
+        });
+      }
+
+      setTitle(''); setDesc(''); setPrice(''); setPhone(''); setEmailOrder(''); setSelectedCats([]);
+      setIsFormExpanded(false); 
+      
+      Alert.alert("Hotovo", initialStatus === 'APPROVED' ? "Publikováno." : "Odesláno ke schválení.");
+
+    } catch (e: any) { 
+      console.error('Firebase error:', e);
+      Alert.alert("Chyba", "Nepodařilo se uložit zakázku."); 
+    } finally { 
+      setLoading(false); 
+    }
+  };
 
   const Footer = () => (
     <View style={styles.footerContainer}>
@@ -330,7 +328,7 @@ export default function App() {
                     <Text style={styles.label}>Email:</Text><TextInput style={[styles.input, {color: '#888'}]} value={currentUser?.email || ''} editable={false} />
                     <Text style={styles.label}>Rok narození:</Text><TextInput style={styles.input} value={birthYear} onChangeText={setBirthYear} placeholder="1995" keyboardType="numeric" placeholderTextColor="#666" />
                     {userData?.role === 'MASTER' && <><Text style={styles.label}>IČO:</Text><TextInput style={styles.input} value={profileIco} onChangeText={setProfileIco} placeholder="Zadejte IČO" placeholderTextColor="#666" /></>}
-                    <TouchableOpacity style={styles.goldBtn} onPress={handleSaveProfile}><Text style={styles.goldBtnText}>ULOŽIT ZMĚNY</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.goldBtn} onPress={handleSaveProfile}><Text style={styles.goldBtnText}>ULOŽIT ZMЁNY</Text></TouchableOpacity>
                     <TouchableOpacity onPress={() => setView('FORM')} style={{marginTop: 20}}><Text style={{color: '#CCC', textAlign: 'center'}}>Zpět</Text></TouchableOpacity>
                  </View>
                  <Footer />
