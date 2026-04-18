@@ -165,11 +165,32 @@ export default function App() {
     finally { setLoading(false); }
   };
 
+  // Компонент футера для повторного використання
+  const Footer = () => (
+    <View style={styles.footerContainer}>
+      <View style={styles.footerDivider} />
+      <Text style={styles.footerText}>
+        © 2026 <Text style={{color: '#FFD700'}}>BytNaKlič</Text>. Premium Servis v ČR.
+      </Text>
+      <Text style={styles.footerText}>
+        Všechna práva vyhrazena.
+      </Text>
+      <View style={styles.footerLinksRow}>
+        <TouchableOpacity style={styles.footerLinkItem} onPress={() => Alert.alert("Podmínky", "Uživatelské podmínky.")}>
+          <Text style={styles.footerLinkText}>Uživatelské podmínky</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.footerLinkItem} onPress={() => Alert.alert("GDPR", "Zásady ochrany údajů.")}>
+          <Text style={styles.footerLinkText}>Ochrana údajů</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
     <ImageBackground 
       source={{ uri: 'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?q=80&w=1000&auto=format&fit=crop' }} 
       style={styles.backgroundImage}
-      imageStyle={{ opacity: 0.4 }} // Чітка цегла
+      imageStyle={{ opacity: 0.4 }}
     >
       <View style={styles.darkOverlay}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{flex: 1}}>
@@ -241,33 +262,45 @@ export default function App() {
                     </TouchableOpacity>
                   ))}
                 </View>
+                {/* Додаємо футер у кінець сторінки */}
+                <Footer />
               </>
             )}
             {view === 'AUTH' && (
-              <View style={[styles.card, {marginTop: 30}]}>
-                <Text style={styles.formTitle}>{authMode === 'LOGIN' ? 'Přihlášení' : 'Registrace'}</Text>
-                {authMode === 'REGISTER' && (
-                  <View style={{flexDirection: 'row', gap: 10, marginVertical: 15}}>
-                    <TouchableOpacity style={[styles.chip, registerRole === 'MASTER' && styles.chipActive, {flex:1, alignItems:'center'}]} onPress={() => setRegisterRole('MASTER')}><Text style={{color: registerRole === 'MASTER' ? '#000' : '#888'}}>Mistr</Text></TouchableOpacity>
-                    <TouchableOpacity style={[styles.chip, registerRole === 'CLIENT' && styles.chipActive, {flex:1, alignItems:'center'}]} onPress={() => setRegisterRole('CLIENT')}><Text style={{color: registerRole === 'CLIENT' ? '#000' : '#888'}}>Zákazník</Text></TouchableOpacity>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{flexGrow: 1}}>
+                <View style={{flex: 1, alignItems: 'center'}}>
+                  <View style={[styles.card, {marginTop: 30}]}>
+                    <Text style={styles.formTitle}>{authMode === 'LOGIN' ? 'Přihlášení' : 'Registrace'}</Text>
+                    {authMode === 'REGISTER' && (
+                      <View style={{flexDirection: 'row', gap: 10, marginVertical: 15}}>
+                        <TouchableOpacity style={[styles.chip, registerRole === 'MASTER' && styles.chipActive, {flex:1, alignItems:'center'}]} onPress={() => setRegisterRole('MASTER')}><Text style={{color: registerRole === 'MASTER' ? '#000' : '#888'}}>Mistr</Text></TouchableOpacity>
+                        <TouchableOpacity style={[styles.chip, registerRole === 'CLIENT' && styles.chipActive, {flex:1, alignItems:'center'}]} onPress={() => setRegisterRole('CLIENT')}><Text style={{color: registerRole === 'CLIENT' ? '#000' : '#888'}}>Zákazník</Text></TouchableOpacity>
+                      </View>
+                    )}
+                    <TextInput style={styles.input} placeholder="Email" placeholderTextColor="#666" value={emailAuth} onChangeText={setEmailAuth} autoCapitalize="none" />
+                    <TextInput style={styles.input} placeholder="Heslo" secureTextEntry placeholderTextColor="#666" value={passwordAuth} onChangeText={setPasswordAuth} />
+                    {authMode === 'REGISTER' && registerRole === 'MASTER' && <TextInput style={styles.input} placeholder="IČO / SRO" placeholderTextColor="#666" value={regIco} onChangeText={setRegIco} />}
+                    <TouchableOpacity style={styles.goldBtn} onPress={handleAuth}><Text style={styles.goldBtnText}>POKRAČOVAT</Text></TouchableOpacity>
+                    <TouchableOpacity onPress={() => setAuthMode(authMode === 'LOGIN' ? 'REGISTER' : 'LOGIN')} style={{marginTop: 20}}><Text style={{color: '#FFD700', textAlign: 'center'}}>Změnit na {authMode === 'LOGIN' ? 'Registraci' : 'Přihlášení'}</Text></TouchableOpacity>
                   </View>
-                )}
-                <TextInput style={styles.input} placeholder="Email" placeholderTextColor="#666" value={emailAuth} onChangeText={setEmailAuth} autoCapitalize="none" />
-                <TextInput style={styles.input} placeholder="Heslo" secureTextEntry placeholderTextColor="#666" value={passwordAuth} onChangeText={setPasswordAuth} />
-                {authMode === 'REGISTER' && registerRole === 'MASTER' && <TextInput style={styles.input} placeholder="IČO / SRO" placeholderTextColor="#666" value={regIco} onChangeText={setRegIco} />}
-                <TouchableOpacity style={styles.goldBtn} onPress={handleAuth}><Text style={styles.goldBtnText}>POKRAČOVAT</Text></TouchableOpacity>
-                <TouchableOpacity onPress={() => setAuthMode(authMode === 'LOGIN' ? 'REGISTER' : 'LOGIN')} style={{marginTop: 20}}><Text style={{color: '#FFD700', textAlign: 'center'}}>Změnit na {authMode === 'LOGIN' ? 'Registraci' : 'Přihlášení'}</Text></TouchableOpacity>
-              </View>
+                </View>
+                {/* Додаємо футер для авторизації */}
+                <Footer />
+              </ScrollView>
             )}
             {view === 'PROFILE' && (
-               <View style={[styles.card, {marginTop: 30}]}>
-                  <Text style={styles.formTitle}>Můj profil</Text>
-                  <Text style={styles.label}>Email:</Text><TextInput style={[styles.input, {color: '#888'}]} value={currentUser?.email || ''} editable={false} />
-                  <Text style={styles.label}>Rok narození:</Text><TextInput style={styles.input} value={birthYear} onChangeText={setBirthYear} placeholder="1995" keyboardType="numeric" placeholderTextColor="#666" />
-                  {userData?.role === 'MASTER' && <><Text style={styles.label}>IČO:</Text><TextInput style={styles.input} value={profileIco} onChangeText={setProfileIco} placeholder="Zadejte IČO" placeholderTextColor="#666" /></>}
-                  <TouchableOpacity style={styles.goldBtn} onPress={handleSaveProfile}><Text style={styles.goldBtnText}>ULOŽIT ZMĚNY</Text></TouchableOpacity>
-                  <TouchableOpacity onPress={() => setView('FORM')} style={{marginTop: 20}}><Text style={{color: '#CCC', textAlign: 'center'}}>Zpět na hlavní panel</Text></TouchableOpacity>
-               </View>
+               <>
+                 <View style={[styles.card, {marginTop: 30}]}>
+                    <Text style={styles.formTitle}>Můj profil</Text>
+                    <Text style={styles.label}>Email:</Text><TextInput style={[styles.input, {color: '#888'}]} value={currentUser?.email || ''} editable={false} />
+                    <Text style={styles.label}>Rok narození:</Text><TextInput style={styles.input} value={birthYear} onChangeText={setBirthYear} placeholder="1995" keyboardType="numeric" placeholderTextColor="#666" />
+                    {userData?.role === 'MASTER' && <><Text style={styles.label}>IČO:</Text><TextInput style={styles.input} value={profileIco} onChangeText={setProfileIco} placeholder="Zadejte IČO" placeholderTextColor="#666" /></>}
+                    <TouchableOpacity style={styles.goldBtn} onPress={handleSaveProfile}><Text style={styles.goldBtnText}>ULOŽIT ZMĚNY</Text></TouchableOpacity>
+                    <TouchableOpacity onPress={() => setView('FORM')} style={{marginTop: 20}}><Text style={{color: '#CCC', textAlign: 'center'}}>Zpět na hlavní panel</Text></TouchableOpacity>
+                 </View>
+                 {/* Додаємо футер для профілю */}
+                 <Footer />
+               </>
             )}
           </ScrollView>
 
@@ -287,7 +320,7 @@ export default function App() {
                       <Ionicons name="call" size={20} color={(currentUser && isProfileComplete()) ? "#000" : "#555"} />
                       <Text style={[styles.callBtnText, (!currentUser || !isProfileComplete()) && {color: '#555'}]}>{maskContact(selectedOrder.phone, 'phone')}</Text>
                     </TouchableOpacity>
-                    {currentUser?.email === ADMIN_EMAIL && <TouchableOpacity style={styles.deleteBtn} onPress={async()=>{await deleteDoc(doc(db,"poptavky",selectedOrder.id)); setSelectedOrder(null);}}><Text style={{color:'#FF4444', fontWeight:'bold', textAlign:'center'}}>Smazat zakázku</Text></TouchableOpacity>}
+                    {currentUser?.email === ADMIN_EMAIL && <TouchableOpacity style={styles.deleteBtn} onPress={async()=>{await deleteDoc(doc(db,"poptavky",selectedOrder.id)); setSelectedOrder(null);}}><Text style={{color:'#FF4444', fontWeight:'bold', textAlign:'center'}}>Odstranit tuto zakázku</Text></TouchableOpacity>}
                   </ScrollView>)}
             </View></View>
           </Modal>
@@ -353,5 +386,35 @@ const styles = StyleSheet.create({
   modalDesc: { color: '#CCC', fontSize: 16, lineHeight: 24, marginBottom: 20 },
   callBtn: { backgroundColor: '#FFD700', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 18, borderRadius: 15, gap: 10 },
   callBtnText: { color: '#000', fontWeight: 'bold', fontSize: 16 },
-  deleteBtn: { marginTop: 30, padding: 15 }
+  deleteBtn: { marginTop: 30, padding: 15 },
+  // НОВІ СТИЛІ ДЛЯ ФУТЕРА
+  footerContainer: {
+    marginTop: 40,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  footerDivider: {
+    width: '40%',
+    height: 1,
+    backgroundColor: '#FFD700',
+    marginBottom: 20,
+  },
+  footerText: {
+    color: '#888',
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  footerLinksRow: {
+    flexDirection: 'row',
+    marginTop: 15,
+    gap: 15,
+  },
+  footerLinkItem: {},
+  footerLinkText: {
+    color: '#FFD700',
+    fontSize: 12,
+    textDecorationLine: 'underline',
+  },
 });
