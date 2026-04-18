@@ -40,7 +40,7 @@ import { auth, db } from '../../firebaseConfig';
 // Пакет для сповіщень
 import emailjs from '@emailjs/browser';
 
-// ОНОВЛЕНО: Твій новий Public Key ініціалізується одразу
+// Ініціалізація EmailJS твоїм новим ключем
 emailjs.init("klUWyK6E3q0jVSWat");
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -156,19 +156,17 @@ export default function App() {
   };
 
   const handleSubmitOrder = async () => {
-    if (!title || !phone || selectedCats.length === 0) return Alert.alert("Pozor", "Doplňte název, telefon a kategorii.");
+    if (!title || !phone || selectedCats.length === 0) return Alert.alert("Pozor", "Doplňte název, телефон a kategorii.");
     setLoading(true);
     
     const initialStatus = currentUser?.email === ADMIN_EMAIL ? 'APPROVED' : 'PENDING';
     
     try {
-      // 1. Firebase запис
       await addDoc(collection(db, "poptavky"), {
         title, description: desc, price, phone, email: emailOrder || "neuvedeno",
         categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus 
       });
 
-      // 2. EmailJS відправка з НОВИМ ключем
       if (initialStatus === 'PENDING') {
         try {
           await emailjs.send(
@@ -180,22 +178,18 @@ export default function App() {
               desc: desc || "Bez popisu",
               email: emailOrder || "neuvedeno"
             },
-            'klUWyK6E3q0jVSWat' // Твій НОВИЙ ключ прямо тут для гарантії
+            'klUWyK6E3q0jVSWat'
           );
-          console.log('EMAIL SENT SUCCESS ✅');
-        } catch (mailErr: any) {
-          console.error('MAIL FAIL ❌', mailErr);
-          // Якщо пошта знову видасть 404, ти побачиш це у консолі
+        } catch (mailErr) {
+          console.error('MAIL FAIL', mailErr);
         }
       }
 
       setTitle(''); setDesc(''); setPrice(''); setPhone(''); setEmailOrder(''); setSelectedCats([]);
       setIsFormExpanded(false); 
-      
       Alert.alert("Hotovo", initialStatus === 'APPROVED' ? "Zakázka byla publikována." : "Odesláno ke schválení. Email adminovi byl odeslán.");
 
     } catch (e: any) { 
-      console.error('Firebase error:', e);
       Alert.alert("Chyba", "Nepodařilo se uložit zakázku."); 
     } finally { 
       setLoading(false); 
@@ -216,9 +210,10 @@ export default function App() {
 
   return (
     <ImageBackground 
-      source={{ uri: 'https://images.unsplash.com/photo-1541888946425-d81bb19480c5?q=80&w=1000&auto=format&fit=crop' }} 
+      // ОНОВЛЕНО: Посилання на темну цегляну стіну
+      source={{ uri: 'https://images.unsplash.com/photo-1585314062340-f1a5a7c9328d?q=80&w=1000&auto=format&fit=crop' }} 
       style={styles.backgroundImage}
-      imageStyle={{ opacity: 0.4 }}
+      imageStyle={{ opacity: 0.5 }}
     >
       <View style={styles.darkOverlay}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{flex: 1}}>
@@ -377,7 +372,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   backgroundImage: { flex: 1, backgroundColor: '#000' },
-  darkOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.45)' },
+  darkOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.55)' }, // Трохи затемнив для кращої читабельності
   header: { paddingTop: 60, paddingHorizontal: 25, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 100 },
   logo: { fontSize: 22, fontWeight: '900', color: '#FFF' },
   profileBtn: { padding: 10, backgroundColor: 'rgba(20, 20, 20, 0.9)', borderRadius: 12, borderWidth: 1, borderColor: '#444' },
