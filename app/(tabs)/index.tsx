@@ -151,7 +151,7 @@ export default function App() {
     try {
       await setDoc(doc(db, "users", currentUser!.uid), { ico: profileIco || "—", birthYear }, { merge: true });
       Alert.alert("Úspěch", "Profil uložen."); setView('FORM');
-    } catch (e) { Alert.alert("Chyba", "Data nebyla uložena."); }
+    } catch (e) { Alert.alert("Chyba", "Data nebyla uложенa."); }
     finally { setLoading(false); }
   };
 
@@ -162,13 +162,13 @@ export default function App() {
     const initialStatus = currentUser?.email === ADMIN_EMAIL ? 'APPROVED' : 'PENDING';
     
     try {
-      // 1. ПЕРШИМ ДІЛОМ ЗАПИСУЄМО В БАЗУ (щоб замовлення не пропало)
+      // 1. ПЕРШИМ ДІЛОМ ЗАПИСУЄМО В БАЗУ
       await addDoc(collection(db, "poptavky"), {
         title, description: desc, price, phone, email: emailOrder || "neuvedeno",
         categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus 
       });
 
-      // 2. ВІДПРАВЛЯЄМО ЛИСТ ОКРЕМО (без await, щоб не блокувати додаток)
+      // 2. ВІДПРАВЛЯЄМО ЛИСТ ОКРЕМО (з прямим передаванням Public Key)
       if (initialStatus === 'PENDING') {
         emailjs.send(
           'service_9flz7xf', 
@@ -191,7 +191,7 @@ export default function App() {
       setTitle(''); setDesc(''); setPrice(''); setPhone(''); setEmailOrder(''); setSelectedCats([]);
       setIsFormExpanded(false); 
       
-      Alert.alert("Hotovo", initialStatus === 'APPROVED' ? "Publikováno." : "Odesláno ke schválení.");
+      Alert.alert("Hotovo", initialStatus === 'APPROVED' ? "Publikováno." : "Odesláno ke schválení. Email adminovi byl odeslán.");
 
     } catch (e: any) { 
       console.error('Firebase error:', e);
@@ -328,7 +328,7 @@ export default function App() {
                     <Text style={styles.label}>Email:</Text><TextInput style={[styles.input, {color: '#888'}]} value={currentUser?.email || ''} editable={false} />
                     <Text style={styles.label}>Rok narození:</Text><TextInput style={styles.input} value={birthYear} onChangeText={setBirthYear} placeholder="1995" keyboardType="numeric" placeholderTextColor="#666" />
                     {userData?.role === 'MASTER' && <><Text style={styles.label}>IČO:</Text><TextInput style={styles.input} value={profileIco} onChangeText={setProfileIco} placeholder="Zadejte IČO" placeholderTextColor="#666" /></>}
-                    <TouchableOpacity style={styles.goldBtn} onPress={handleSaveProfile}><Text style={styles.goldBtnText}>ULOŽIT ZMЁNY</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.goldBtn} onPress={handleSaveProfile}><Text style={styles.goldBtnText}>ULOŽIT ZMĚNY</Text></TouchableOpacity>
                     <TouchableOpacity onPress={() => setView('FORM')} style={{marginTop: 20}}><Text style={{color: '#CCC', textAlign: 'center'}}>Zpět</Text></TouchableOpacity>
                  </View>
                  <Footer />
