@@ -161,53 +161,47 @@ export default function App() {
 
   // ОНОВЛЕНА ФУНКЦІЯ ПУБЛІКАЦІЇ З ПЕРЕВІРКОЮ ПОШТИ
   const handleSubmitOrder = async () => {
-    if (!title || !phone || selectedCats.length === 0) return Alert.alert("Pozor", "Doplňte název, telefon a kategorii.");
-    setLoading(true);
-    
-    const initialStatus = currentUser?.email === ADMIN_EMAIL ? 'APPROVED' : 'PENDING';
-    
-    try {
-      // 1. Спочатку пробуємо відправити лист (тільки якщо створює клієнт)
-      if (initialStatus === 'PENDING') {
-        try {
-          await emailjs.send(
-            'service_9flz7xf', 
-            'template_dsxyb8h', 
-            { 
-              title: title, 
-              phone: phone, 
-              desc: desc || "Bez popisu",
-              email: emailOrder || "neuvedeno"
-            }, 
-            'Plwz8uPyle__rci_b'
-          );
-          console.log('Email sent successfully!');
-        } catch (mailErr: any) {
-          console.log('EmailJS Error:', mailErr);
-          // Ми не зупиняємо процес, якщо пошта впала, але виведемо помилку в консоль
-        }
-      }
-
-      // 2. Записуємо дані в Firebase
-      await addDoc(collection(db, "poptavky"), {
-        title, description: desc, price, phone, email: emailOrder || "neuvedeno",
-        categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus 
-      });
-
-      setTitle(''); setDesc(''); setPrice(''); setPhone(''); setEmailOrder(''); setSelectedCats([]);
-      setIsFormExpanded(false); 
-      
-      if (initialStatus === 'APPROVED') {
-         Alert.alert("Hotovo", "Zakázka byla publikována.");
-      } else {
-         Alert.alert("Odesláno", "Zakázka čeká на schválení. Přijde вам email.");
-      }
-    } catch (e) { 
-      console.error('Firebase error:', e);
-      Alert.alert("Chyba", "Odeslání selhalo."); 
+  if (!title || !phone || selectedCats.length === 0) return Alert.alert("Pozor", "Doplňte název, telefon a kategorii.");
+  setLoading(true);
+  
+  const initialStatus = currentUser?.email === ADMIN_EMAIL ? 'APPROVED' : 'PENDING';
+  
+  try {
+    // 1. ПЕРШИМ ДІЛОМ ВІДПРАВЛЯЄМО ЛИСТ (якщо не адмін)
+    if (initialStatus === 'PENDING') {
+      await emailjs.send(
+        'service_9flz7xf', 
+        'template_dsxyb8h', 
+        { 
+          title: title, 
+          phone: phone, 
+          desc: desc || "Bez popisu",
+          email: emailOrder || "neuvedeno"
+        }, 
+        'Plwz8uPyle__rci_b'
+      );
+      console.log('Email sent!');
     }
-    finally { setLoading(false); }
-  };
+
+    // 2. ЗАПИСУЄМО В БАЗУ
+    await addDoc(collection(db, "poptavky"), {
+      title, description: desc, price, phone, email: emailOrder || "neuvedeno",
+      categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus 
+    });
+
+    setTitle(''); setDesc(''); setPrice(''); setPhone(''); setEmailOrder(''); setSelectedCats([]);
+    setIsFormExpanded(false); 
+    
+    Alert.alert("Hotovo", initialStatus === 'APPROVED' ? "Publikováno." : "Odesláno ke schválení. Email adminovi byl odeslán.");
+
+  } catch (e: any) { 
+    console.error(e);
+    // Якщо буде помилка - ми її побачимо
+    Alert.alert("Chyba", e.text || "Něco se nepovedlo."); 
+  } finally { 
+    setLoading(false); 
+  }
+};
 
   const Footer = () => (
     <View style={styles.footerContainer}>
