@@ -126,6 +126,7 @@ export default function App() {
 
   const handleAuth = async () => {
     if (!emailAuth || !passwordAuth) return Alert.alert("Chyba", "Vyplňte všechna pole.");
+    if (authMode === 'REGISTER' && registerRole === 'MASTER' && !regIco) return Alert.alert("Pozor", "IČO je povinné.");
     setLoading(true);
     try {
       if (authMode === 'REGISTER') {
@@ -168,10 +169,10 @@ export default function App() {
 
       if (initialStatus === 'PENDING') {
         emailjs.send(
-          'service_pvh9nup', 
-          'template_900lkhl', 
+          'service_9flz7xf', 
+          'template_dsxyb8h', 
           { title, phone, desc: desc || "Bez popisu" }, 
-          'p63C0rEaH2E5I7u_o'
+          'Plwz8uPyle__rci_b'
         ).catch(err => console.log('EmailJS Error:', err));
       }
 
@@ -181,7 +182,7 @@ export default function App() {
       if (initialStatus === 'APPROVED') {
          Alert.alert("Hotovo", "Zakázka byla publikována.");
       } else {
-         Alert.alert("Odesláno", "Zakázka byla odeslána і čeká na schválení. Přijde vám email.");
+         Alert.alert("Odesláno", "Zakázka čeká на schválení. Přijde вам email.");
       }
     } catch (e) { Alert.alert("Chyba", "Odeslání selhalo."); }
     finally { setLoading(false); }
@@ -235,6 +236,7 @@ export default function App() {
               ) : (
                 <TouchableOpacity style={styles.menuItem} onPress={() => {setView('AUTH'); setIsMenuOpen(false);}}><Ionicons name="log-in-outline" size={18} color="#FFD700" style={styles.menuIcon} /><Text style={styles.menuText}>Vstup pro mistry</Text></TouchableOpacity>
               )}
+              <TouchableOpacity style={[styles.menuItem, {marginTop: 10, borderTopWidth: 1, borderColor: '#333'}]} onPress={() => setIsMenuOpen(false)}><Text style={{color: '#FFD700', width: '100%', textAlign: 'center', paddingTop: 10}}>Zavřít</Text></TouchableOpacity>
             </View>
           )}
 
@@ -249,18 +251,17 @@ export default function App() {
                   </TouchableOpacity>
                   {isFormExpanded && (
                     <View style={styles.formBody}>
-                      <View style={styles.catGrid}>{CATEGORIES.map(c => (<TouchableOpacity key={c} style={[styles.chip, selectedCats.includes(c) && styles.chipActive]} onPress={() => selectedCats.includes(c) ? setSelectedCats(selectedCats.filter(x => x !== c)) : setSelectedCats([...selectedCats, c])}><Text style={[styles.chipText, selectedCats.includes(c) && {color: '#000'}]}>{c}</Text></TouchableOpacity>))}</View>
                       <TextInput style={styles.input} placeholder="Název zakázky" placeholderTextColor="#999" value={title} onChangeText={setTitle} />
                       <TextInput style={[styles.input, {height: 80}]} placeholder="Detailní popis..." multiline placeholderTextColor="#999" value={desc} onChangeText={setDesc} />
                       <TextInput style={styles.input} placeholder="Rozpočet (Kč)" keyboardType="numeric" placeholderTextColor="#999" value={price} onChangeText={setPrice} />
                       <TextInput style={styles.input} placeholder="Telefon" keyboardType="phone-pad" placeholderTextColor="#999" value={phone} onChangeText={setPhone} />
                       <TextInput style={styles.input} placeholder="Váš Email" placeholderTextColor="#999" value={emailOrder} onChangeText={setEmailOrder} />
+                      <View style={styles.catGrid}>{CATEGORIES.map(c => (<TouchableOpacity key={c} style={[styles.chip, selectedCats.includes(c) && styles.chipActive]} onPress={() => selectedCats.includes(c) ? setSelectedCats(selectedCats.filter(x => x !== c)) : setSelectedCats([...selectedCats, c])}><Text style={[styles.chipText, selectedCats.includes(c) && {color: '#000'}]}>{c}</Text></TouchableOpacity>))}</View>
                       <TouchableOpacity style={styles.goldBtn} onPress={handleSubmitOrder}><Text style={styles.goldBtnText}>PUBLIKOVAT</Text></TouchableOpacity>
                     </View>
                   )}
                 </View>
 
-                {/* БЛОК СТАТИСТИКИ (ПОВЕРНУТО) */}
                 <View style={styles.statsContainer}>
                    <View style={styles.statBox}><Text style={styles.statLabel}>Týden</Text><Text style={styles.statValue}>{visibleOrders.filter(o => (Date.now() - o.createdAt?.seconds*1000) < 604800000).length}</Text></View>
                    <View style={[styles.statBox, {borderLeftWidth:1, borderRightWidth:1, borderColor:'#444'}]}><Text style={styles.statLabel}>Měsíc</Text><Text style={styles.statValue}>{visibleOrders.filter(o => (Date.now() - o.createdAt?.seconds*1000) < 2592000000).length}</Text></View>
@@ -268,7 +269,7 @@ export default function App() {
                 </View>
 
                 <View style={styles.listSection}>
-                  <Text style={styles.sectionTitle}>Správa zakázek</Text>
+                  <Text style={styles.sectionTitle}>Zakázky</Text>
                   {visibleOrders.map((item) => (
                     <TouchableOpacity key={item.id} style={styles.orderCard} onPress={() => handleOpenOrder(item)}>
                       <View style={styles.orderHeader}>
@@ -287,16 +288,24 @@ export default function App() {
             )}
 
             {view === 'AUTH' && (
-              <View style={{paddingTop: 40, alignItems: 'center', width: '100%'}}>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{flexGrow: 1, width: '100%', alignItems: 'center', paddingTop: 40}}>
                 <View style={styles.card}>
                   <Text style={styles.formTitle}>{authMode === 'LOGIN' ? 'Přihlášení' : 'Registrace'}</Text>
-                  <TextInput style={[styles.input, {marginTop: 20}]} placeholder="Email" placeholderTextColor="#666" value={emailAuth} onChangeText={setEmailAuth} autoCapitalize="none" />
+                  {authMode === 'REGISTER' && (
+                      <View style={{flexDirection: 'row', gap: 10, marginVertical: 15}}>
+                        <TouchableOpacity style={[styles.chip, registerRole === 'MASTER' && styles.chipActive, {flex:1, alignItems:'center'}]} onPress={() => setRegisterRole('MASTER')}><Text style={{color: registerRole === 'MASTER' ? '#000' : '#888'}}>Mistr</Text></TouchableOpacity>
+                        <TouchableOpacity style={[styles.chip, registerRole === 'CLIENT' && styles.chipActive, {flex:1, alignItems:'center'}]} onPress={() => setRegisterRole('CLIENT')}><Text style={{color: registerRole === 'CLIENT' ? '#000' : '#888'}}>Zákazník</Text></TouchableOpacity>
+                      </View>
+                    )}
+                  <TextInput style={[styles.input, {marginTop: 10}]} placeholder="Email" placeholderTextColor="#666" value={emailAuth} onChangeText={setEmailAuth} autoCapitalize="none" />
                   <TextInput style={styles.input} placeholder="Heslo" secureTextEntry placeholderTextColor="#666" value={passwordAuth} onChangeText={setPasswordAuth} />
+                  {authMode === 'REGISTER' && registerRole === 'MASTER' && <TextInput style={styles.input} placeholder="IČO / SRO" placeholderTextColor="#666" value={regIco} onChangeText={setRegIco} />}
                   <TouchableOpacity style={styles.goldBtn} onPress={handleAuth}><Text style={styles.goldBtnText}>POKRAČOVAT</Text></TouchableOpacity>
                   <TouchableOpacity onPress={() => setAuthMode(authMode === 'LOGIN' ? 'REGISTER' : 'LOGIN')} style={{marginTop: 20}}><Text style={{color: '#FFD700', textAlign: 'center'}}>Změnit na {authMode === 'LOGIN' ? 'Registraci' : 'Přihlášení'}</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={() => setView('FORM')} style={{marginTop: 15}}><Text style={{color: '#888', textAlign: 'center'}}>Zrušit</Text></TouchableOpacity>
                 </View>
                 <Footer />
-              </View>
+              </ScrollView>
             )}
 
             {view === 'PROFILE' && (
@@ -305,6 +314,7 @@ export default function App() {
                     <Text style={styles.formTitle}>Můj profil</Text>
                     <Text style={styles.label}>Email:</Text><TextInput style={[styles.input, {color: '#888'}]} value={currentUser?.email || ''} editable={false} />
                     <Text style={styles.label}>Rok narození:</Text><TextInput style={styles.input} value={birthYear} onChangeText={setBirthYear} placeholder="1995" keyboardType="numeric" placeholderTextColor="#666" />
+                    {userData?.role === 'MASTER' && <><Text style={styles.label}>IČO:</Text><TextInput style={styles.input} value={profileIco} onChangeText={setProfileIco} placeholder="Zadejte IČO" placeholderTextColor="#666" /></>}
                     <TouchableOpacity style={styles.goldBtn} onPress={handleSaveProfile}><Text style={styles.goldBtnText}>ULOŽIT ZMĚNY</Text></TouchableOpacity>
                     <TouchableOpacity onPress={() => setView('FORM')} style={{marginTop: 20}}><Text style={{color: '#CCC', textAlign: 'center'}}>Zpět</Text></TouchableOpacity>
                  </View>
@@ -325,6 +335,7 @@ export default function App() {
                        <View style={styles.infoBox}><Text style={styles.infoLabel}>ZOBRAZENÍ</Text><Text style={styles.infoValue}>{selectedOrder.views}</Text></View>
                     </View>
                     <Text style={styles.infoLabel}>POPIS:</Text><Text style={styles.modalDesc}>{selectedOrder.description}</Text>
+                    <Text style={styles.infoLabel}>EMAIL:</Text><Text style={styles.modalDesc}>{maskContact(selectedOrder.email || "neuvedeno", 'email')}</Text>
                     <TouchableOpacity style={[styles.callBtn, (!currentUser || !isProfileComplete()) && {backgroundColor: '#222'}]} onPress={() => { if(!currentUser) return setView('AUTH'); if(!isProfileComplete()) return setView('PROFILE'); Alert.alert("Kontakt", selectedOrder.phone); }}>
                       <Ionicons name="call" size={20} color={(currentUser && isProfileComplete()) ? "#000" : "#555"} />
                       <Text style={[styles.callBtnText, (!currentUser || !isProfileComplete()) && {color: '#555'}]}>{maskContact(selectedOrder.phone, 'phone')}</Text>
