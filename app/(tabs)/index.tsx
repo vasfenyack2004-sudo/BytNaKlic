@@ -165,20 +165,8 @@ categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus
 
 if (initialStatus === 'PENDING') { 
 try { 
-await emailjs.send( 
-'service_9flz7xf', 
-'template_dsxyb8h', 
-{ 
-title: title, 
-phone: phone, 
-desc: desc || "Bez popisu", 
-email: emailOrder || "neuvedeno" 
-}, 
-'klUWyK6E3q0jVSWat' 
-); 
-} catch (mailErr) { 
-console.error('MAIL FAIL', mailErr); 
-} 
+await emailjs.send('service_9flz7xf', 'template_dsxyb8h', { title, phone, desc: desc || "Bez popisu", email: emailOrder || "neuvedeno" }, 'klUWyK6E3q0jVSWat'); 
+} catch (mailErr) { console.error('MAIL FAIL', mailErr); } 
 } 
 
 setTitle(''); setDesc(''); setPrice(''); setPhone(''); setEmailOrder(''); setSelectedCats([]); 
@@ -340,7 +328,7 @@ imageStyle={{ opacity: 1 }}
 <Text style={styles.infoLabel}>POPIS:</Text><Text style={styles.modalDesc}>{selectedOrder.description}</Text> 
 <Text style={styles.infoLabel}>KONTAKTNÍ EMAIL:</Text><Text style={styles.modalDesc}>{maskContact(selectedOrder.email || "neuvedeno", 'email')}</Text> 
 
-{/* ВИПРАВЛЕНА КНОПКА ПОДЗВОНИТИ ДЛЯ ГОСТЕЙ */}
+{/* КНОПКА ВИКЛИКУ З ЛОГІКОЮ ДЛЯ ГІСТЯ */} 
 <TouchableOpacity 
 style={[styles.callBtn, (!currentUser || !isProfileComplete()) && {backgroundColor: '#222'}]} 
 onPress={() => { 
@@ -391,7 +379,7 @@ Alert.alert("Kontakt", "Telefon: " + selectedOrder.phone);
 
 const styles = StyleSheet.create({ 
 backgroundImage: { flex: 1, backgroundColor: '#000' }, 
-darkOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.3)' }, 
+darkOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.2)' }, 
 header: { paddingTop: 60, paddingHorizontal: 25, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 100 }, 
 logo: { fontSize: 22, fontWeight: '900', color: '#FFF' }, 
 profileBtn: { padding: 10, backgroundColor: 'rgba(20, 20, 20, 0.9)', borderRadius: 12, borderWidth: 1, borderColor: '#444' }, 
