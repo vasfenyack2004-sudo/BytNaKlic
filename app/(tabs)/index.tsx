@@ -40,8 +40,8 @@ import { auth, db } from '../../firebaseConfig';
 // Пакет для сповіщень
 import emailjs from '@emailjs/browser';
 
-// КРИТИЧНО: Ініціалізація на самому верху поза компонентом
-emailjs.init("Plwz8uPyle__rci_b");
+// ОНОВЛЕНО: Твій новий Public Key ініціалізується одразу
+emailjs.init("klUWyK6E3q0jVSWat");
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -146,12 +146,12 @@ export default function App() {
   };
 
   const handleSaveProfile = async () => {
-    if (!birthYear) return Alert.alert("Pozor", "Rok narození je povinný.");
+    if (!birthYear) return Alert.alert("Pozor", "Rok narození є povinný.");
     setLoading(true);
     try {
       await setDoc(doc(db, "users", currentUser!.uid), { ico: profileIco || "—", birthYear }, { merge: true });
       Alert.alert("Úspěch", "Profil uložen."); setView('FORM');
-    } catch (e) { Alert.alert("Chyba", "Data nebyla uložena."); }
+    } catch (e) { Alert.alert("Chyba", "Data nebyla uложена."); }
     finally { setLoading(false); }
   };
 
@@ -162,13 +162,13 @@ export default function App() {
     const initialStatus = currentUser?.email === ADMIN_EMAIL ? 'APPROVED' : 'PENDING';
     
     try {
-      // 1. Спочатку Firebase
+      // 1. Firebase запис
       await addDoc(collection(db, "poptavky"), {
         title, description: desc, price, phone, email: emailOrder || "neuvedeno",
         categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus 
       });
 
-      // 2. Відправка листа (Тільки для PENDING)
+      // 2. EmailJS відправка з НОВИМ ключем
       if (initialStatus === 'PENDING') {
         try {
           await emailjs.send(
@@ -179,12 +179,13 @@ export default function App() {
               phone: phone, 
               desc: desc || "Bez popisu",
               email: emailOrder || "neuvedeno"
-            }
+            },
+            'klUWyK6E3q0jVSWat' // Твій НОВИЙ ключ прямо тут для гарантії
           );
           console.log('EMAIL SENT SUCCESS ✅');
         } catch (mailErr: any) {
           console.error('MAIL FAIL ❌', mailErr);
-          Alert.alert("Email Error", "Zakázka uložena, ale admin nedostal email. Status: " + mailErr.status);
+          // Якщо пошта знову видасть 404, ти побачиш це у консолі
         }
       }
 
@@ -205,7 +206,7 @@ export default function App() {
     <View style={styles.footerContainer}>
       <View style={styles.footerDivider} />
       <Text style={styles.footerText}>
-        © 2026 <Text style={{color: '#FFD700'}}>BytNaKlič</Text>. Premium Servis в ČR.
+        © 2026 <Text style={{color: '#FFD700'}}>BytNaKlič</Text>. Premium Servis v ČR.
       </Text>
       <Text style={styles.footerText}>Všechna práva vyhrazena.</Text>
     </View>
