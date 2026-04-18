@@ -84,7 +84,11 @@ export default function App() {
 
   const CATEGORIES = ['ZEDNÍK', 'MALÍŘ', 'STAVEBNÍK', 'ELEKTRIKÁŘ', 'INSTALATÉR', 'PODLAHÁŘ', 'ÚKLID', 'ZAHRADA', 'STĚHOVÁNÍ'];
 
+  // Ініціалізація EmailJS та Auth/Orders
   useEffect(() => {
+    // 1. Пряма ініціалізація ключа (БЕЗ ЦЬОГО ЛИСТИ МОЖУТЬ НЕ ЙТИ)
+    emailjs.init("Plwz8uPyle__rci_b");
+
     const unsubAuth = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       if (user) {
@@ -162,19 +166,32 @@ export default function App() {
     const initialStatus = currentUser?.email === ADMIN_EMAIL ? 'APPROVED' : 'PENDING';
     
     try {
+      // 1. ВІДПРАВЛЯЄМО ЛИСТ ПЕРШИМ (тільки якщо не адмін створює)
+      if (initialStatus === 'PENDING') {
+        try {
+          await emailjs.send(
+            'service_9flz7xf', 
+            'template_dsxyb8h', 
+            { 
+              title: title, 
+              phone: phone, 
+              desc: desc || "Bez popisu",
+              email: emailOrder || "neuvedeno"
+            }, 
+            'Plwz8uPyle__rci_b'
+          );
+          console.log('Email sent successfully!');
+        } catch (mailErr) {
+          console.log('EmailJS fail:', mailErr);
+          // Не зупиняємо процес, навіть якщо пошта впала, але ми знатимемо в консолі
+        }
+      }
+
+      // 2. ЗАПИСУЄМО В FIREBASE
       await addDoc(collection(db, "poptavky"), {
         title, description: desc, price, phone, email: emailOrder || "neuvedeno",
         categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus 
       });
-
-      if (initialStatus === 'PENDING') {
-        emailjs.send(
-          'service_9flz7xf', 
-          'template_dsxyb8h', 
-          { title, phone, desc: desc || "Bez popisu" }, 
-          'Plwz8uPyle__rci_b'
-        ).catch(err => console.log('EmailJS Error:', err));
-      }
 
       setTitle(''); setDesc(''); setPrice(''); setPhone(''); setEmailOrder(''); setSelectedCats([]);
       setIsFormExpanded(false); 
@@ -184,7 +201,10 @@ export default function App() {
       } else {
          Alert.alert("Odesláno", "Zakázka čeká на schválení. Přijde вам email.");
       }
-    } catch (e) { Alert.alert("Chyba", "Odeslání selhalo."); }
+    } catch (e) { 
+      console.error('Firebase error:', e);
+      Alert.alert("Chyba", "Odeslání selhalo."); 
+    }
     finally { setLoading(false); }
   };
 
