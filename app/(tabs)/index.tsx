@@ -64,14 +64,17 @@ export default function App() {
   const [orders, setOrders] = useState<Poptavka[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Poptavka | null>(null);
   
+  // Auth fields
   const [emailAuth, setEmailAuth] = useState('');
   const [passwordAuth, setPasswordAuth] = useState('');
   const [registerRole, setRegisterRole] = useState<'MASTER' | 'CLIENT'>('MASTER');
   const [regIco, setRegIco] = useState('');
   
+  // Profile fields
   const [profileIco, setProfileIco] = useState('');
   const [birthYear, setBirthYear] = useState('');
 
+  // Form fields
   const [selectedCats, setSelectedCats] = useState<string[]>([]);
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
@@ -82,7 +85,7 @@ export default function App() {
   const CATEGORIES = ['ZEDNÍK', 'MALÍŘ', 'STAVEBNÍK', 'ELEKTRIKÁŘ', 'INSTALATÉR', 'PODLAHÁŘ', 'ÚKLID', 'ZAHRADA', 'STĚHOVÁNÍ'];
 
   useEffect(() => {
-    // Фікс ініціалізації: обов'язково для роботи EmailJS
+    // Важливо: Ініціалізація EmailJS твоїм ключем
     emailjs.init("Plwz8uPyle__rci_b");
 
     const unsubAuth = onAuthStateChanged(auth, (user) => {
@@ -151,7 +154,7 @@ export default function App() {
     try {
       await setDoc(doc(db, "users", currentUser!.uid), { ico: profileIco || "—", birthYear }, { merge: true });
       Alert.alert("Úspěch", "Profil uložen."); setView('FORM');
-    } catch (e) { Alert.alert("Chyba", "Data nebyla uложенa."); }
+    } catch (e) { Alert.alert("Chyba", "Data nebyla uložena."); }
     finally { setLoading(false); }
   };
 
@@ -162,13 +165,13 @@ export default function App() {
     const initialStatus = currentUser?.email === ADMIN_EMAIL ? 'APPROVED' : 'PENDING';
     
     try {
-      // 1. ПЕРШИМ ДІЛОМ ЗАПИСУЄМО В БАЗУ
+      // 1. ЗАПИСУЄМО В FIREBASE
       await addDoc(collection(db, "poptavky"), {
         title, description: desc, price, phone, email: emailOrder || "neuvedeno",
         categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus 
       });
 
-      // 2. ВІДПРАВЛЯЄМО ЛИСТ ОКРЕМО (з прямим передаванням Public Key)
+      // 2. ВІДПРАВЛЯЄМО ЛИСТ (з діагностикою)
       if (initialStatus === 'PENDING') {
         emailjs.send(
           'service_9flz7xf', 
@@ -181,17 +184,17 @@ export default function App() {
           }, 
           'Plwz8uPyle__rci_b'
         )
-        .then((res) => console.log('Email SUCCESS!', res.status))
+        .then((res) => console.log('Email sent!', res.status))
         .catch((err) => {
-          console.error('Email FAILED...', err);
-          Alert.alert("Email Error", "Zakázka uložena, ale email adminovi neodešel.");
+          console.error('Email failed:', err);
+          Alert.alert("Email Error", "Zakázka uložena, ale admin nedostal email.");
         });
       }
 
       setTitle(''); setDesc(''); setPrice(''); setPhone(''); setEmailOrder(''); setSelectedCats([]);
       setIsFormExpanded(false); 
       
-      Alert.alert("Hotovo", initialStatus === 'APPROVED' ? "Publikováno." : "Odesláno ke schválení. Email adminovi byl odeslán.");
+      Alert.alert("Hotovo", initialStatus === 'APPROVED' ? "Zakázka byla publikována." : "Odesláno ke schválení. Email adminovi byl odeslán.");
 
     } catch (e: any) { 
       console.error('Firebase error:', e);
@@ -205,7 +208,7 @@ export default function App() {
     <View style={styles.footerContainer}>
       <View style={styles.footerDivider} />
       <Text style={styles.footerText}>
-        © 2026 <Text style={{color: '#FFD700'}}>BytNaKlič</Text>. Premium Servis v ČR.
+        © 2026 <Text style={{color: '#FFD700'}}>BytNaKlič</Text>. Premium Servis в ČR.
       </Text>
       <Text style={styles.footerText}>Všechna práva vyhrazena.</Text>
     </View>
@@ -215,7 +218,7 @@ export default function App() {
 
   return (
     <ImageBackground 
-      source={{ uri: 'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?q=80&w=1000&auto=format&fit=crop' }} 
+      source={{ uri: 'https://images.unsplash.com/photo-1541888946425-d81bb19480c5?q=80&w=1000&auto=format&fit=crop' }} 
       style={styles.backgroundImage}
       imageStyle={{ opacity: 0.4 }}
     >
@@ -282,7 +285,7 @@ export default function App() {
                 </View>
 
                 <View style={styles.listSection}>
-                  <Text style={styles.sectionTitle}>Zakázky</Text>
+                  <Text style={styles.sectionTitle}>Aktuální zakázky</Text>
                   {visibleOrders.map((item) => (
                     <TouchableOpacity key={item.id} style={styles.orderCard} onPress={() => handleOpenOrder(item)}>
                       <View style={styles.orderHeader}>
@@ -301,7 +304,7 @@ export default function App() {
             )}
 
             {view === 'AUTH' && (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{flexGrow: 1, width: '100%', alignItems: 'center', paddingTop: 40}}>
+              <ScrollView contentContainerStyle={{flexGrow: 1, width: '100%', alignItems: 'center', paddingTop: 40}}>
                 <View style={styles.card}>
                   <Text style={styles.formTitle}>{authMode === 'LOGIN' ? 'Přihlášení' : 'Registrace'}</Text>
                   {authMode === 'REGISTER' && (
@@ -314,8 +317,7 @@ export default function App() {
                   <TextInput style={styles.input} placeholder="Heslo" secureTextEntry placeholderTextColor="#666" value={passwordAuth} onChangeText={setPasswordAuth} />
                   {authMode === 'REGISTER' && registerRole === 'MASTER' && <TextInput style={styles.input} placeholder="IČO / SRO" placeholderTextColor="#666" value={regIco} onChangeText={setRegIco} />}
                   <TouchableOpacity style={styles.goldBtn} onPress={handleAuth}><Text style={styles.goldBtnText}>POKRAČOVAT</Text></TouchableOpacity>
-                  <TouchableOpacity onPress={() => setAuthMode(authMode === 'LOGIN' ? 'REGISTER' : 'LOGIN')} style={{marginTop: 20}}><Text style={{color: '#FFD700', textAlign: 'center'}}>Změnit na {authMode === 'LOGIN' ? 'Registraci' : 'Přihlášení'}</Text></TouchableOpacity>
-                  <TouchableOpacity onPress={() => setView('FORM')} style={{marginTop: 15}}><Text style={{color: '#888', textAlign: 'center'}}>Zrušit</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={() => setAuthMode(authMode === 'LOGIN' ? 'REGISTER' : 'LOGIN')} style={{marginTop: 20}}><Text style={{color: '#FFD700', textAlign: 'center'}}>Změnit на {authMode === 'LOGIN' ? 'Registraci' : 'Přihlášení'}</Text></TouchableOpacity>
                 </View>
                 <Footer />
               </ScrollView>
@@ -340,7 +342,7 @@ export default function App() {
             <View style={styles.modalOverlay}><View style={styles.modalContent}>
                 <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedOrder(null)}><Ionicons name="close" size={28} color="#FFD700" /></TouchableOpacity>
                 {selectedOrder && (<ScrollView showsVerticalScrollIndicator={false}>
-                    {selectedOrder.status === 'PENDING' && <Text style={{color: '#FFA500', fontWeight: 'bold', marginBottom: 10}}>⚠️ Tato zakázka čeká na schválení</Text>}
+                    {selectedOrder.status === 'PENDING' && <Text style={{color: '#FFA500', fontWeight: 'bold', marginBottom: 10}}>⚠️ Tato zakázka čeká на schválení</Text>}
                     <Text style={styles.modalCats}>{selectedOrder.categories.join(' • ')}</Text>
                     <Text style={styles.modalTitle}>{selectedOrder.title}</Text>
                     <View style={styles.modalInfoRow}>
@@ -348,7 +350,7 @@ export default function App() {
                        <View style={styles.infoBox}><Text style={styles.infoLabel}>ZOBRAZENÍ</Text><Text style={styles.infoValue}>{selectedOrder.views}</Text></View>
                     </View>
                     <Text style={styles.infoLabel}>POPIS:</Text><Text style={styles.modalDesc}>{selectedOrder.description}</Text>
-                    <Text style={styles.infoLabel}>EMAIL:</Text><Text style={styles.modalDesc}>{maskContact(selectedOrder.email || "neuvedeno", 'email')}</Text>
+                    <Text style={styles.infoLabel}>KONTAKTNÍ EMAIL:</Text><Text style={styles.modalDesc}>{maskContact(selectedOrder.email || "neuvedeno", 'email')}</Text>
                     <TouchableOpacity style={[styles.callBtn, (!currentUser || !isProfileComplete()) && {backgroundColor: '#222'}]} onPress={() => { if(!currentUser) return setView('AUTH'); if(!isProfileComplete()) return setView('PROFILE'); Alert.alert("Kontakt", selectedOrder.phone); }}>
                       <Ionicons name="call" size={20} color={(currentUser && isProfileComplete()) ? "#000" : "#555"} />
                       <Text style={[styles.callBtnText, (!currentUser || !isProfileComplete()) && {color: '#555'}]}>{maskContact(selectedOrder.phone, 'phone')}</Text>
