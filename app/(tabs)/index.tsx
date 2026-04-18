@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -14,218 +13,364 @@ import {
   View
 } from 'react-native';
 
-// ШЛЯХ ДО FIREBASE (Переконайся, що файл firebaseConfig.js в папці вище)
-import { db } from '../../firebaseConfig';
+// Шлях до твого Firebase
+import { auth, db } from '../../firebaseConfig';
 
-import { Ionicons } from '@expo/vector-icons';
 import {
   addDoc,
   collection,
   deleteDoc,
   doc,
+  getDoc,
   onSnapshot,
   orderBy,
-  query
+  query,
+  setDoc
 } from 'firebase/firestore';
 
-const { width } = Dimensions.get('window');
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+  User
+} from 'firebase/auth';
 
-// Типізація для уникнення помилок 'never' як на твоїх скріншотах
+import { Ionicons } from '@expo/vector-icons';
+
+// Типізація
 interface Poptavka {
   id: string;
   title: string;
   description: string;
-  contact: string;
+  price: string;
+  phone: string;
+  email?: string;
   categories: string[];
   createdAt: any;
 }
 
 export default function App() {
-  const [poptavky, setPoptavky] = useState<Poptavka[]>([]);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [view, setView] = useState<'FORM' | 'AUTH' | 'ADMIN'>('FORM');
+  const [authMode, setAuthMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userRole, setUserRole] = useState<'MASTER' | 'CLIENT' | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  // Стан для авторизації
-  const [adminPass, setAdminPass] = useState('');
+  const [orders, setOrders] = useState<Poptavka[]>([]);
   
-  // Стан для форми
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  // Поля авторизації / Реєстрації
+  const [emailAuth, setEmailAuth] = useState('');
+  const [passwordAuth, setPasswordAuth] = useState('');
+  const [registerRole, setRegisterRole] = useState<'MASTER' | 'CLIENT'>('MASTER');
+  const [ico, setIco] = useState('');
+
+  // Поля форми замовлення
+  const [selectedCats, setSelectedCats] = useState<string[]>([]);
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [contact, setContact] = useState('');
+  const [desc, setDesc] = useState('');
+  const [price, setPrice] = useState('');
+  const [phone, setPhone] = useState('');
+  const [emailClient, setEmailClient] = useState('');
 
   const CATEGORIES = [
-    'Malíř', 'Zedník', 'Instalatér', 'Elektrikář', 'Hodinový manžel', 
-    'Podlahář', 'Obkladač', 'Úklid', 'Zahrada', 'Stěhování', 
-    'Odvoz odpadu', 'Stavba', 'Ostatní'
+    'ZEDNÍK', 'MALÍŘ', 'STAVEBNÍK', 'ELEKTRIKÁŘ', 'INSTALATÉR', 
+    'PODLAHÁŘ', 'ÚKLID', 'ZAHRADA', 'STĚHOVÁNÍ'
   ];
 
-  // Завантаження даних у реальному часі
+  // Слухач стану юзера та замовлень
   useEffect(() => {
-    const q = query(collection(db, "poptavky"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const data = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Poptavka[];
-      setPoptavky(data);
-    }, (error) => {
-      console.error("Firebase error:", error);
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        // Отримуємо роль користувача з бази
+        try {
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          if (userDoc.exists()) {
+            const role = userDoc.data().role;
+            setUserRole(role);
+            if (role === 'MASTER') setView('ADMIN');
+            else setView('FORM'); // Клієнтів кидаємо назад на форму
+          } else {
+            setView('FORM');
+          }
+        } catch (e) {
+          console.log("Error fetching user role", e);
+        }
+      } else {
+        setUserRole(null);
+      }
     });
-    return () => unsubscribe();
+
+    const q = query(collection(db, "poptavky"), orderBy("createdAt", "desc"));
+    const unsubDocs = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Poptavka[];
+      setOrders(data);
+    });
+
+    return () => { unsubAuth(); unsubDocs(); };
   }, []);
 
-  const toggleCategory = (cat: string) => {
-    if (selectedCategories.includes(cat)) {
-      setSelectedCategories(selectedCategories.filter(item => item !== cat));
-    } else {
-      setSelectedCategories([...selectedCategories, cat]);
-    }
-  };
-
-  const handleLogin = () => {
-    // Вхід в адмін-панель (можеш змінити пароль тут)
-    if (adminPass === '1234' || adminPass === 'admin') {
-      setIsAdmin(true);
-      setIsLoggingIn(false);
-      setAdminPass('');
-    } else {
-      Alert.alert("Chyba", "Nesprávné heslo для адмін панелі");
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, "poptavky", id));
-      if (Platform.OS === 'web') alert("Smazáno!");
-    } catch (e) {
-      console.error("Error deleting:", e);
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (selectedCategories.length === 0 || !title || !contact) {
-      alert("Vyplňte prosím všechna pole!");
-      return;
+  // БЕЗДОГАННА РЕЄСТРАЦІЯ
+  const handleRegister = async () => {
+    if (!emailAuth || !passwordAuth) return Alert.alert("Chyba", "Vyplňte email a heslo");
+    
+    // Перевірка IČO для майстрів
+    if (registerRole === 'MASTER' && !ico.trim()) {
+      return Alert.alert("Chyba", "Jako Mistr musíte zadat své IČO nebo SRO.");
     }
 
     setLoading(true);
     try {
-      await addDoc(collection(db, "poptavky"), {
-        categories: selectedCategories,
-        title,
-        description,
-        contact,
-        createdAt: new Date(),
+      // 1. Створюємо юзера в Auth
+      const userCred = await createUserWithEmailAndPassword(auth, emailAuth, passwordAuth);
+      
+      // 2. Записуємо його дані в Firestore (Колекція 'users')
+      await setDoc(doc(db, "users", userCred.user.uid), {
+        email: emailAuth,
+        role: registerRole,
+        ico: ico.trim() || "neposkytnuto",
+        createdAt: new Date()
       });
-      setSelectedCategories([]);
-      setTitle('');
-      setDescription('');
-      setContact('');
-      alert("Poptávka odeslána успішно!");
-    } catch (e) {
-      console.error("Error adding:", e);
-      alert("Došlo k chybě při odesílání.");
+
+      Alert.alert("Úspěch", "Účet byl úspěšně vytvořen!");
+      setEmailAuth(''); setPasswordAuth(''); setIco('');
+    } catch (e: any) {
+      Alert.alert("Chyba", "Registrace selhala: " + e.message);
+    } finally { setLoading(false); }
+  };
+
+  // Вхід
+  const handleLogin = async () => {
+    if (!emailAuth || !passwordAuth) return Alert.alert("Chyba", "Vyplňte všechna pole");
+    setLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, emailAuth, passwordAuth);
+    } catch (e: any) {
+      Alert.alert("Chyba", "Nesprávný email nebo heslo.");
+    } finally { setLoading(false); }
+  };
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    setView('FORM');
+    setIsMenuOpen(false);
+  };
+
+  // Відправка замовлення
+  const handleSubmit = async () => {
+    if (!title || !phone || selectedCats.length === 0) {
+      Alert.alert("Pozor", "Vyplňte prosím název, telefon a kategorii");
+      return;
     }
-    setLoading(false);
+    setLoading(true);
+    try {
+      await addDoc(collection(db, "poptavky"), {
+        title,
+        description: desc,
+        price,
+        phone,
+        email: emailClient || "neuvedeno",
+        categories: selectedCats,
+        createdAt: new Date()
+      });
+      setTitle(''); setDesc(''); setPrice(''); setPhone(''); setEmailClient(''); setSelectedCats([]);
+      Alert.alert("Úspěch", "Poptávka byla úspěšně odeslána");
+    } catch (e) {
+      Alert.alert("Chyba", "Nepodařilo se odeslat.");
+    } finally { setLoading(false); }
+  };
+
+  const deleteOrder = async (id: string) => {
+    try { await deleteDoc(doc(db, "poptavky", id)); } catch (e) { console.log(e); }
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
       <StatusBar barStyle="light-content" />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
-        {/* HEADER З ЛОГОТИПОМ ТА КНОПКОЮ ВХОДУ */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.logoText}>BYT<Text style={{color: '#FFD700'}}>NAKLÍČ</Text></Text>
-            <Text style={styles.subLogo}>SERVIS REKONSTRUKCE A OPRAV</Text>
-          </View>
-          <TouchableOpacity 
-            style={styles.loginBtnHeader} 
-            onPress={() => isAdmin ? setIsAdmin(false) : setIsLoggingIn(true)}
-          >
-            <Ionicons name={isAdmin ? "log-out-outline" : "person-outline"} size={24} color="white" />
-          </TouchableOpacity>
+      
+      {/* ПРЕМІУМ ШАПКА */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.logo}>BYT<Text style={{color: '#FFD700'}}>NAKLÍČ</Text></Text>
+          <Text style={styles.subLogo}>PREMIUM SERVIS</Text>
         </View>
+        
+        <View style={{zIndex: 100}}>
+          <TouchableOpacity style={styles.profileBtn} onPress={() => setIsMenuOpen(!isMenuOpen)}>
+            <Ionicons name="person-outline" size={22} color="#FFD700" />
+          </TouchableOpacity>
 
-        {/* ПАНЕЛЬ ВХОДУ (LOGIN MODAL) */}
-        {isLoggingIn && (
-          <View style={styles.loginCard}>
-            <Text style={styles.loginTitle}>Přihlášení do správy</Text>
-            <TextInput 
-              style={styles.input} 
-              placeholder="Zadejte heslo" 
-              placeholderTextColor="#666" 
-              secureTextEntry 
-              value={adminPass}
-              onChangeText={setAdminPass}
-            />
-            <View style={styles.loginActions}>
-              <TouchableOpacity onPress={() => setIsLoggingIn(false)} style={styles.cancelBtn}>
-                <Text style={{color: '#888'}}>Zrušit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleLogin} style={styles.confirmLoginBtn}>
-                <Text style={{color: '#000', fontWeight: 'bold'}}>Přihlásit se</Text>
+          {/* ПЛАВАЮЧЕ МЕНЮ */}
+          {isMenuOpen && (
+            <View style={styles.floatingMenu}>
+              <View style={styles.menuHeader}>
+                <Ionicons name="person-circle-outline" size={40} color="#FFD700" />
+                <Text style={styles.menuTitleText}>{currentUser ? currentUser.email : "МЕНЮ КОРИСТУВАЧА"}</Text>
+                {userRole && <Text style={{color: '#888', fontSize: 10, marginTop: 2}}>{userRole === 'MASTER' ? 'Role: Mistr' : 'Role: Zákazník'}</Text>}
+              </View>
+              <View style={styles.menuDivider} />
+              
+              {!currentUser ? (
+                <>
+                  <TouchableOpacity style={styles.menuItem} onPress={() => {setView('AUTH'); setAuthMode('LOGIN'); setIsMenuOpen(false);}}>
+                    <Ionicons name="log-in-outline" size={18} color="#FFD700" style={styles.menuIcon} />
+                    <Text style={styles.menuText}>Přihlásit se</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.menuItem} onPress={() => {setView('AUTH'); setAuthMode('REGISTER'); setIsMenuOpen(false);}}>
+                    <Ionicons name="person-add-outline" size={18} color="#FFD700" style={styles.menuIcon} />
+                    <Text style={styles.menuText}>Registrace</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  {userRole === 'MASTER' && (
+                    <TouchableOpacity style={styles.menuItem} onPress={() => {setView('ADMIN'); setIsMenuOpen(false);}}>
+                      <Ionicons name="list-outline" size={18} color="#FFD700" style={styles.menuIcon} />
+                      <Text style={styles.menuText}>Nástěnka zakázek</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity style={styles.menuItem} onPress={() => {setView('FORM'); setIsMenuOpen(false);}}>
+                    <Ionicons name="create-outline" size={18} color="#FFD700" style={styles.menuIcon} />
+                    <Text style={styles.menuText}>Nová poptávka</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
+                    <Ionicons name="log-out-outline" size={18} color="#FFD700" style={styles.menuIcon} />
+                    <Text style={styles.menuText}>Odhlásit se</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          )}
+        </View>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        
+        {/* ФОРМА ЗАМОВЛЕННЯ */}
+        {view === 'FORM' && (
+          <View style={styles.card}>
+            <View style={styles.emblemContainer}>
+              <Ionicons name="compass-outline" size={45} color="#FFD700" style={styles.emblemIcon} />
+            </View>
+            <Text style={styles.mainTitle}>Nová poptávka</Text>
+            
+            <Text style={styles.label}>Vyberte profese:</Text>
+            <View style={styles.catGrid}>
+              {CATEGORIES.map(c => (
+                <TouchableOpacity 
+                  key={c} 
+                  style={[styles.chip, selectedCats.includes(c) && styles.chipLuminous]}
+                  onPress={() => selectedCats.includes(c) ? setSelectedCats(selectedCats.filter(x => x !== c)) : setSelectedCats([...selectedCats, c])}
+                >
+                  <Text style={[styles.chipText, selectedCats.includes(c) && styles.chipTextActive]}>{c}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TextInput style={styles.input} placeholder="Název zakázky" placeholderTextColor="#555" value={title} onChangeText={setTitle} />
+            <TextInput style={[styles.input, {height: 80}]} placeholder="Popis práce..." placeholderTextColor="#555" multiline value={desc} onChangeText={setDesc} />
+            <TextInput style={styles.input} placeholder="Cenová nabídka (Kč)" placeholderTextColor="#555" keyboardType="numeric" value={price} onChangeText={setPrice} />
+            <TextInput style={styles.input} placeholder="Telefonní číslo" placeholderTextColor="#555" keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+            <TextInput style={styles.input} placeholder="Email (nepovinné)" placeholderTextColor="#555" value={emailClient} onChangeText={setEmailClient} />
+
+            <TouchableOpacity style={styles.goldBtnLuminous} onPress={handleSubmit} disabled={loading}>
+              {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.goldBtnText}>ODESLAT ZÁVAZNĚ</Text>}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ЕКРАН АВТОРИЗАЦІЇ (ЛОГІН / РЕЄСТРАЦІЯ З ВИБОРОМ РОЛІ) */}
+        {view === 'AUTH' && (
+          <View style={[styles.card, { marginTop: 20 }]}>
+            <Text style={[styles.mainTitle, {textAlign: 'center', marginBottom: 30}]}>
+              {authMode === 'LOGIN' ? 'Vstup do účtu' : 'Vytvořit nový účet'}
+            </Text>
+
+            {/* ОРИГІНАЛЬНИЙ ПЕРЕМИКАЧ РОЛЕЙ (Тільки при реєстрації) */}
+            {authMode === 'REGISTER' && (
+              <View style={styles.roleContainer}>
+                <TouchableOpacity 
+                  style={[styles.roleCard, registerRole === 'MASTER' && styles.roleCardActive]} 
+                  onPress={() => setRegisterRole('MASTER')}
+                >
+                  <Ionicons name="hammer-outline" size={28} color={registerRole === 'MASTER' ? '#000' : '#FFD700'} />
+                  <Text style={[styles.roleText, registerRole === 'MASTER' && {color: '#000'}]}>Jsem Mistr</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.roleCard, registerRole === 'CLIENT' && styles.roleCardActive]} 
+                  onPress={() => setRegisterRole('CLIENT')}
+                >
+                  <Ionicons name="home-outline" size={28} color={registerRole === 'CLIENT' ? '#000' : '#FFD700'} />
+                  <Text style={[styles.roleText, registerRole === 'CLIENT' && {color: '#000'}]}>Zákazník</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            
+            <TextInput style={styles.input} placeholder="Email" placeholderTextColor="#555" value={emailAuth} onChangeText={setEmailAuth} autoCapitalize="none" keyboardType="email-address" />
+            <TextInput style={styles.input} placeholder="Heslo" placeholderTextColor="#555" secureTextEntry value={passwordAuth} onChangeText={setPasswordAuth} />
+
+            {/* ДИНАМІЧНЕ ПОЛЕ IČO */}
+            {authMode === 'REGISTER' && (
+              <TextInput 
+                style={styles.input} 
+                placeholder={registerRole === 'MASTER' ? "IČO / SRO (Povinné pro mistry)" : "IČO (Nepovinné pro zákazníky)"} 
+                placeholderTextColor={registerRole === 'MASTER' ? "#886A00" : "#555"} 
+                value={ico} 
+                onChangeText={setIco} 
+                keyboardType="numeric"
+              />
+            )}
+
+            <TouchableOpacity 
+              style={styles.goldBtnLuminous} 
+              onPress={authMode === 'LOGIN' ? handleLogin : handleRegister}
+              disabled={loading}
+            >
+              {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.goldBtnText}>
+                {authMode === 'LOGIN' ? 'PŘIHLÁSIT SE' : 'ZAREGISTROVAT SE'}
+              </Text>}
+            </TouchableOpacity>
+
+            <View style={styles.authToggleBox}>
+              <Text style={{color: '#666'}}>
+                {authMode === 'LOGIN' ? 'Nemáte ještě účet?' : 'Již máte účet?'}
+              </Text>
+              <TouchableOpacity onPress={() => setAuthMode(authMode === 'LOGIN' ? 'REGISTER' : 'LOGIN')}>
+                <Text style={{color: '#FFD700', fontWeight: 'bold', marginLeft: 5}}>
+                  {authMode === 'LOGIN' ? 'Zaregistrujte se' : 'Přihlaste se'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* ГОЛОВНА ФОРМА (ЯКЩО НЕ АДМІН) */}
-        {!isAdmin ? (
-          <View style={styles.formContainer}>
-            <View style={styles.accentLine} />
-            <Text style={styles.formTitle}>Nová poptávka</Text>
+        {/* АДМІН ПАНЕЛЬ (ТІЛЬКИ ДЛЯ МАЙСТРІВ) */}
+        {view === 'ADMIN' && currentUser && userRole === 'MASTER' && (
+          <View style={styles.adminContent}>
+            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15}}>
+              <Text style={styles.mainTitle}>Nástěnka zakázek</Text>
+              <Text style={{color: '#FFD700', fontWeight: 'bold'}}>{orders.length} aktivních</Text>
+            </View>
             
-            <Text style={styles.label}>Vyberte profese (i více):</Text>
-            <View style={styles.categoryGrid}>
-              {CATEGORIES.map((cat) => (
-                <TouchableOpacity
-                  key={cat}
-                  onPress={() => toggleCategory(cat)}
-                  style={[styles.categoryChip, selectedCategories.includes(cat) && styles.categoryChipActive]}
-                >
-                  <Text style={[styles.categoryChipText, selectedCategories.includes(cat) && styles.categoryChipTextActive]}>{cat}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TextInput style={styles.input} placeholder="Co potřebujete udělat?" placeholderTextColor="#555" value={title} onChangeText={setTitle} />
-            <TextInput style={[styles.input, styles.textArea]} placeholder="Popis práce..." placeholderTextColor="#555" multiline value={description} onChangeText={setDescription} />
-            <TextInput style={styles.input} placeholder="Váš telefon nebo email" placeholderTextColor="#555" value={contact} onChangeText={setContact} />
-
-            <TouchableOpacity style={styles.submitButton} onPress={handleSubmit} disabled={loading}>
-              {loading ? <ActivityIndicator color="black" /> : <Text style={styles.submitButtonText}>ODESLAT POPTÁVKU</Text>}
-            </TouchableOpacity>
-
-            <View style={styles.footerInfo}>
-              <Ionicons name="shield-checkmark-outline" size={16} color="#444" />
-              <Text style={styles.footerInfoText}>Vaše údaje jsou u nás v bezpečí</Text>
-            </View>
-          </View>
-        ) : (
-          /* АДМІН ПАНЕЛЬ - СПИСОК ЗАМОВЛЕНЬ */
-          <View style={styles.adminSection}>
-            <Text style={styles.adminHeader}>Aktuální poptávky</Text>
-            {poptavky.length === 0 && <Text style={{color: '#444', textAlign: 'center', marginTop: 40}}>Zatím žádné poptávky</Text>}
-            {poptavky.map((item) => (
+            {orders.map((item) => (
               <View key={item.id} style={styles.orderCard}>
-                <View style={styles.orderHeaderRow}>
-                  <View style={{flex: 1}}>
-                    <Text style={styles.orderCategoryList}>{item.categories?.join(', ')}</Text>
-                    <Text style={styles.orderTitleText}>{item.title}</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteIconBtn}>
+                <View style={styles.orderHeader}>
+                  <Text style={styles.orderCatsLuminous}>{item.categories?.join(' • ')}</Text>
+                  <TouchableOpacity onPress={() => deleteOrder(item.id)}>
                     <Ionicons name="trash-outline" size={20} color="#FF4444" />
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.orderDescriptionText}>{item.description}</Text>
-                <View style={styles.contactBox}>
-                  <Ionicons name="call" size={14} color="#FFD700" />
-                  <Text style={styles.contactText}>{item.contact}</Text>
-                </View>
+                <Text style={styles.orderTitle}>{item.title}</Text>
+                <Text style={styles.orderPrice}>Rozpočet: {item.price} Kč</Text>
+                <Text style={styles.orderDesc}>{item.description}</Text>
+                <Text style={{color: '#666', fontSize: 12, marginBottom: 15}}>Email: {item.email}</Text>
+                
+                <TouchableOpacity style={styles.callBtn} onPress={() => Alert.alert("Kontakt", item.phone)}>
+                  <Ionicons name="call" size={16} color="#000" />
+                  <Text style={styles.callBtnText}>ZAVOLAT KLIENTA: {item.phone}</Text>
+                </TouchableOpacity>
               </View>
             ))}
           </View>
@@ -235,44 +380,52 @@ export default function App() {
   );
 }
 
+// === СТИЛІ ===
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
-  scrollContent: { paddingBottom: 60 },
-  header: { paddingTop: 60, paddingHorizontal: 25, paddingBottom: 25, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#050505' },
-  logoText: { fontSize: 26, fontWeight: '900', color: '#FFF', letterSpacing: 0.5 },
-  subLogo: { color: '#444', fontSize: 10, fontWeight: 'bold', marginTop: -2 },
-  loginBtnHeader: { padding: 10, backgroundColor: '#111', borderRadius: 12, borderWidth: 1, borderColor: '#222' },
+  container: { flex: 1, backgroundColor: '#0A0A0C' },
+  scrollContent: { paddingBottom: 80, alignItems: 'center' },
+  header: { paddingTop: 60, paddingHorizontal: 25, paddingBottom: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  logo: { fontSize: 24, fontWeight: '900', color: '#FFF' },
+  subLogo: { color: '#888', fontSize: 10, fontWeight: 'bold', marginTop: -2, letterSpacing: 2 },
+  profileBtn: { padding: 10, backgroundColor: '#111', borderRadius: 12, borderWidth: 1, borderColor: '#333' },
+  floatingMenu: { position: 'absolute', top: 50, right: 0, width: 220, backgroundColor: '#121212', borderRadius: 16, padding: 15, borderWidth: 1, borderColor: '#333', zIndex: 1000 },
+  menuHeader: { alignItems: 'center', marginBottom: 10 },
+  menuTitleText: { color: '#FFD700', fontSize: 10, fontWeight: 'bold', marginTop: 5, textAlign: 'center' },
+  menuDivider: { height: 1, backgroundColor: '#333', marginBottom: 10 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
+  menuIcon: { marginRight: 15 },
+  menuText: { color: '#CCC', fontSize: 14 },
+  card: { backgroundColor: '#121212', width: '92%', borderRadius: 24, padding: 25, borderWidth: 1, borderColor: '#222', marginTop: 10 },
+  emblemContainer: { alignItems: 'center', marginBottom: 10 },
+  emblemIcon: { textShadowColor: 'rgba(255, 215, 0, 0.6)', textShadowRadius: 15 },
+  mainTitle: { color: '#FFF', fontSize: 24, fontWeight: 'bold', marginBottom: 15 },
   
-  loginCard: { backgroundColor: '#111', margin: 20, padding: 25, borderRadius: 24, borderWidth: 1, borderColor: '#333' },
-  loginTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
-  loginActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 20, alignItems: 'center' },
-  cancelBtn: { padding: 10 },
-  confirmLoginBtn: { backgroundColor: '#FFD700', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10 },
+  // КАРТКИ ВИБОРУ РОЛІ
+  roleContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20, gap: 10 },
+  roleCard: { flex: 1, backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#333', borderRadius: 16, padding: 20, alignItems: 'center', justifyContent: 'center' },
+  roleCardActive: { backgroundColor: '#FFD700', borderColor: '#FFD700', shadowColor: '#FFD700', shadowOffset: {width: 0, height: 0}, shadowOpacity: 0.5, shadowRadius: 10 },
+  roleText: { color: '#FFF', fontWeight: 'bold', marginTop: 10, fontSize: 14 },
+  authToggleBox: { flexDirection: 'row', justifyContent: 'center', marginTop: 25 },
 
-  formContainer: { backgroundColor: '#0A0A0A', margin: 20, borderRadius: 32, padding: 25, borderWidth: 1, borderColor: '#151515' },
-  accentLine: { width: 40, height: 4, backgroundColor: '#FFD700', borderRadius: 2, marginBottom: 15 },
-  formTitle: { color: '#FFF', fontSize: 24, fontWeight: 'bold', marginBottom: 25 },
-  label: { color: '#666', fontSize: 13, marginBottom: 15, fontWeight: '600' },
-  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 25 },
-  categoryChip: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 14, backgroundColor: '#111', borderWidth: 1, borderColor: '#222' },
-  categoryChipActive: { backgroundColor: '#FFD700', borderColor: '#FFD700' },
-  categoryChipText: { color: '#888', fontSize: 13 },
-  categoryChipTextActive: { color: '#000', fontWeight: 'bold' },
-  input: { backgroundColor: '#111', color: '#FFF', borderRadius: 18, padding: 18, marginBottom: 15, borderWidth: 1, borderColor: '#1A1A1A', fontSize: 15 },
-  textArea: { height: 120, textAlignVertical: 'top' },
-  submitButton: { backgroundColor: '#FFD700', padding: 20, borderRadius: 20, alignItems: 'center', marginTop: 10, shadowColor: '#FFD700', shadowOpacity: 0.2, shadowRadius: 15 },
-  submitButtonText: { color: '#000', fontWeight: '900', fontSize: 16 },
-  footerInfo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 20, gap: 8 },
-  footerInfoText: { color: '#444', fontSize: 12 },
-
-  adminSection: { padding: 20 },
-  adminHeader: { color: '#FFF', fontSize: 20, fontWeight: 'bold', marginBottom: 20 },
-  orderCard: { backgroundColor: '#0A0A0A', borderRadius: 24, padding: 20, marginBottom: 18, borderWidth: 1, borderColor: '#151515', borderLeftWidth: 4, borderLeftColor: '#FFD700' },
-  orderHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  orderCategoryList: { color: '#FFD700', fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 4 },
-  orderTitleText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
-  orderDescriptionText: { color: '#888', fontSize: 14, lineHeight: 20 },
-  contactBox: { flexDirection: 'row', alignItems: 'center', marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: '#1A1A1A', gap: 8 },
-  contactText: { color: '#FFF', fontWeight: 'bold', fontSize: 15 },
-  deleteIconBtn: { padding: 10, backgroundColor: 'rgba(255, 68, 68, 0.05)', borderRadius: 12 }
+  label: { color: '#666', fontSize: 12, marginBottom: 10 },
+  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6, backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#333' },
+  chipLuminous: { borderColor: '#FFD700', backgroundColor: 'rgba(255, 215, 0, 0.05)' },
+  chipText: { color: '#666', fontSize: 11, fontWeight: '600' },
+  chipTextActive: { color: '#FFD700' },
+  input: { backgroundColor: '#1A1A1A', color: '#FFF', borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#333' },
+  goldBtnLuminous: { backgroundColor: '#FFD700', padding: 18, borderRadius: 12, alignItems: 'center', marginTop: 5 },
+  goldBtnText: { color: '#000', fontWeight: '900', fontSize: 14 },
+  bottomLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 20 },
+  bottomLinkText: { color: '#FFF', fontWeight: 'bold', marginRight: 5 },
+  
+  adminContent: { width: '92%', marginTop: 20 },
+  orderCard: { backgroundColor: '#121212', borderRadius: 16, padding: 20, marginBottom: 15, borderWidth: 1, borderColor: '#333' },
+  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  orderCatsLuminous: { color: '#FFD700', fontSize: 10, fontWeight: 'bold' },
+  orderTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
+  orderPrice: { color: '#FFD700', fontSize: 14, marginVertical: 5, fontWeight: '600' },
+  orderDesc: { color: '#888', fontSize: 13, marginBottom: 10 },
+  callBtn: { backgroundColor: '#FFD700', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 15, borderRadius: 10, marginTop: 5 },
+  callBtnText: { color: '#000', fontWeight: 'bold', marginLeft: 10 }
 });
