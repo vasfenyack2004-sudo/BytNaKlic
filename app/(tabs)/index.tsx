@@ -28,8 +28,7 @@ import {
 import {
   addDoc,
   collection,
-  deleteDoc,
-  doc,
+  deleteDoc, doc,
   increment,
   onSnapshot,
   orderBy,
@@ -38,7 +37,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '../../firebaseConfig';
 
-// Пакет для сповіщень на пошту
+// Пакет для сповіщень
 import emailjs from '@emailjs/browser';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -65,14 +64,17 @@ export default function App() {
   const [orders, setOrders] = useState<Poptavka[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Poptavka | null>(null);
   
+  // Auth fields
   const [emailAuth, setEmailAuth] = useState('');
   const [passwordAuth, setPasswordAuth] = useState('');
   const [registerRole, setRegisterRole] = useState<'MASTER' | 'CLIENT'>('MASTER');
   const [regIco, setRegIco] = useState('');
   
+  // Profile fields
   const [profileIco, setProfileIco] = useState('');
   const [birthYear, setBirthYear] = useState('');
 
+  // Form fields
   const [selectedCats, setSelectedCats] = useState<string[]>([]);
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
@@ -86,7 +88,7 @@ export default function App() {
     const unsubAuth = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       if (user) {
-        onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+        const unsubUser = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
             setUserData(data);
@@ -94,6 +96,7 @@ export default function App() {
             setBirthYear(data.birthYear || '');
           }
         });
+        return () => unsubUser();
       } else { setUserData(null); }
     });
 
@@ -131,7 +134,7 @@ export default function App() {
           email: emailAuth, role: emailAuth === ADMIN_EMAIL ? 'SUPER_ADMIN' : registerRole, 
           ico: regIco || "—", birthYear: "", createdAt: new Date()
         });
-        setView('PROFILE');
+        setView(emailAuth === ADMIN_EMAIL ? 'FORM' : 'PROFILE');
       } else { 
         await signInWithEmailAndPassword(auth, emailAuth, passwordAuth); 
         setView('FORM');
@@ -151,7 +154,6 @@ export default function App() {
     finally { setLoading(false); }
   };
 
-  // ОНОВЛЕНА ФУНКЦІЯ З EMAILJS
   const handleSubmitOrder = async () => {
     if (!title || !phone || selectedCats.length === 0) return Alert.alert("Pozor", "Doplňte název, telefon a kategorii.");
     setLoading(true);
@@ -159,20 +161,18 @@ export default function App() {
     const initialStatus = currentUser?.email === ADMIN_EMAIL ? 'APPROVED' : 'PENDING';
     
     try {
-      // 1. Зберігаємо в Firebase
       await addDoc(collection(db, "poptavky"), {
         title, description: desc, price, phone, email: emailOrder || "neuvedeno",
         categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus 
       });
 
-      // 2. Відправляємо лист адміну через EmailJS (якщо створив клієнт)
       if (initialStatus === 'PENDING') {
         emailjs.send(
           'service_pvh9nup', 
           'template_900lkhl', 
           { title, phone, desc: desc || "Bez popisu" }, 
           'p63C0rEaH2E5I7u_o'
-        ).then(() => console.log('Email sent!')).catch(err => console.log('Email error:', err));
+        ).catch(err => console.log('EmailJS Error:', err));
       }
 
       setTitle(''); setDesc(''); setPrice(''); setPhone(''); setEmailOrder(''); setSelectedCats([]);
@@ -181,7 +181,7 @@ export default function App() {
       if (initialStatus === 'APPROVED') {
          Alert.alert("Hotovo", "Zakázka byla publikována.");
       } else {
-         Alert.alert("Odesláno", "Zakázka čeká na schválení. Přijde vám potvrzení na email.");
+         Alert.alert("Odesláno", "Zakázka byla odeslána і čeká na schválení. Přijde vám email.");
       }
     } catch (e) { Alert.alert("Chyba", "Odeslání selhalo."); }
     finally { setLoading(false); }
@@ -190,7 +190,9 @@ export default function App() {
   const Footer = () => (
     <View style={styles.footerContainer}>
       <View style={styles.footerDivider} />
-      <Text style={styles.footerText}>© 2026 <Text style={{color: '#FFD700'}}>BytNaKlič</Text>. Premium Servis. </Text>
+      <Text style={styles.footerText}>
+        © 2026 <Text style={{color: '#FFD700'}}>BytNaKlič</Text>. Premium Servis v ČR.
+      </Text>
       <Text style={styles.footerText}>Všechna práva vyhrazena.</Text>
     </View>
   );
@@ -211,96 +213,136 @@ export default function App() {
             <Text style={styles.logo}>BYT<Text style={{color: '#FFD700'}}>NAKLÍČ</Text></Text>
             <TouchableOpacity style={styles.profileBtn} onPress={() => setIsMenuOpen(true)}>
               <Ionicons name="person-outline" size={20} color="#FFD700" />
+              {currentUser && !isProfileComplete() && <View style={styles.badge} />}
             </TouchableOpacity>
           </View>
 
+          {isMenuOpen && <TouchableOpacity style={styles.menuCloseOverlay} activeOpacity={1} onPress={() => setIsMenuOpen(false)} />}
+
           {isMenuOpen && (
             <View style={styles.floatingMenu}>
-                <TouchableOpacity onPress={() => {setView('PROFILE'); setIsMenuOpen(false);}}><Text style={styles.menuText}>Můj profil</Text></TouchableOpacity>
-                <TouchableOpacity onPress={() => {signOut(auth); setView('FORM'); setIsMenuOpen(false);}}><Text style={[styles.menuText, {marginTop: 15}]}>Odhlásit se</Text></TouchableOpacity>
-                <TouchableOpacity style={{marginTop: 20}} onPress={() => setIsMenuOpen(false)}><Text style={{color: '#FFD700'}}>Zavřít</Text></TouchableOpacity>
+              <Text style={styles.menuTitleText}>{currentUser ? currentUser.email : "UŽIVATEL"}</Text>
+              <View style={styles.menuDivider} />
+              {currentUser ? (
+                <>
+                  <TouchableOpacity style={styles.menuItem} onPress={() => {setView('PROFILE'); setIsMenuOpen(false);}}>
+                    <Ionicons name="person-outline" size={18} color="#FFD700" style={styles.menuIcon} />
+                    <View><Text style={styles.menuText}>Můj profil</Text>{!isProfileComplete() && <Text style={styles.warningText}>⚠️ Dokončit registraci</Text>}</View>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.menuItem} onPress={() => {setView('FORM'); setIsMenuOpen(false);}}><Ionicons name="list-outline" size={18} color="#FFD700" style={styles.menuIcon} /><Text style={styles.menuText}>Nástěnka zakázek</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.menuItem} onPress={() => {signOut(auth); setIsMenuOpen(false); setView('FORM');}}><Ionicons name="log-out-outline" size={18} color="#FFD700" style={styles.menuIcon} /><Text style={styles.menuText}>Odhlásit se</Text></TouchableOpacity>
+                </>
+              ) : (
+                <TouchableOpacity style={styles.menuItem} onPress={() => {setView('AUTH'); setIsMenuOpen(false);}}><Ionicons name="log-in-outline" size={18} color="#FFD700" style={styles.menuIcon} /><Text style={styles.menuText}>Vstup pro mistry</Text></TouchableOpacity>
+              )}
             </View>
           )}
 
-          <ScrollView contentContainerStyle={styles.scrollContent}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             {view === 'FORM' && (
               <>
-                <View style={styles.emblemContainer}><Ionicons name="construct-outline" size={60} color="#FFD700" /></View>
-                <View style={[styles.card, {borderColor: '#00BFFF'}]}>
+                <View style={styles.emblemContainer}><Ionicons name="construct-outline" size={60} color="#FFD700" style={styles.glowIcon} /></View>
+                <View style={[styles.card, styles.neonBlueBorder]}>
                   <TouchableOpacity style={styles.formHeader} onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsFormExpanded(!isFormExpanded); }}>
                     <Text style={styles.formTitle}>Nová poptávka</Text>
                     <Ionicons name={isFormExpanded ? "chevron-up" : "chevron-down"} size={24} color="#FFF" />
                   </TouchableOpacity>
                   {isFormExpanded && (
                     <View style={styles.formBody}>
-                      <TextInput style={styles.input} placeholder="Název" placeholderTextColor="#999" value={title} onChangeText={setTitle} />
-                      <TextInput style={[styles.input, {height: 60}]} placeholder="Popis" multiline placeholderTextColor="#999" value={desc} onChangeText={setDesc} />
-                      <TextInput style={styles.input} placeholder="Telefon" keyboardType="phone-pad" placeholderTextColor="#999" value={phone} onChangeText={setPhone} />
                       <View style={styles.catGrid}>{CATEGORIES.map(c => (<TouchableOpacity key={c} style={[styles.chip, selectedCats.includes(c) && styles.chipActive]} onPress={() => selectedCats.includes(c) ? setSelectedCats(selectedCats.filter(x => x !== c)) : setSelectedCats([...selectedCats, c])}><Text style={[styles.chipText, selectedCats.includes(c) && {color: '#000'}]}>{c}</Text></TouchableOpacity>))}</View>
+                      <TextInput style={styles.input} placeholder="Název zakázky" placeholderTextColor="#999" value={title} onChangeText={setTitle} />
+                      <TextInput style={[styles.input, {height: 80}]} placeholder="Detailní popis..." multiline placeholderTextColor="#999" value={desc} onChangeText={setDesc} />
+                      <TextInput style={styles.input} placeholder="Rozpočet (Kč)" keyboardType="numeric" placeholderTextColor="#999" value={price} onChangeText={setPrice} />
+                      <TextInput style={styles.input} placeholder="Telefon" keyboardType="phone-pad" placeholderTextColor="#999" value={phone} onChangeText={setPhone} />
+                      <TextInput style={styles.input} placeholder="Váš Email" placeholderTextColor="#999" value={emailOrder} onChangeText={setEmailOrder} />
                       <TouchableOpacity style={styles.goldBtn} onPress={handleSubmitOrder}><Text style={styles.goldBtnText}>PUBLIKOVAT</Text></TouchableOpacity>
                     </View>
                   )}
                 </View>
 
+                {/* БЛОК СТАТИСТИКИ (ПОВЕРНУТО) */}
+                <View style={styles.statsContainer}>
+                   <View style={styles.statBox}><Text style={styles.statLabel}>Týden</Text><Text style={styles.statValue}>{visibleOrders.filter(o => (Date.now() - o.createdAt?.seconds*1000) < 604800000).length}</Text></View>
+                   <View style={[styles.statBox, {borderLeftWidth:1, borderRightWidth:1, borderColor:'#444'}]}><Text style={styles.statLabel}>Měsíc</Text><Text style={styles.statValue}>{visibleOrders.filter(o => (Date.now() - o.createdAt?.seconds*1000) < 2592000000).length}</Text></View>
+                   <View style={styles.statBox}><Text style={styles.statLabel}>Celkem</Text><Text style={styles.statValue}>{visibleOrders.length}</Text></View>
+                </View>
+
                 <View style={styles.listSection}>
-                  <Text style={styles.sectionTitle}>Zakázky</Text>
+                  <Text style={styles.sectionTitle}>Správa zakázek</Text>
                   {visibleOrders.map((item) => (
                     <TouchableOpacity key={item.id} style={styles.orderCard} onPress={() => handleOpenOrder(item)}>
                       <View style={styles.orderHeader}>
                         <Text style={styles.orderCats}>{item.categories[0]}</Text>
-                        {item.status === 'PENDING' && <Text style={{color: '#FFA500', fontSize: 10}}>⏳ ČEKÁ</Text>}
+                        <View style={{flexDirection: 'row', gap: 10}}>
+                          {item.status === 'PENDING' && <Text style={{color: '#FFA500', fontSize: 10, fontWeight: 'bold'}}>⏳ ČEKÁ</Text>}
+                          <View style={styles.viewsBadge}><Ionicons name="eye-outline" size={14} color="#00BFFF" /><Text style={styles.viewsText}>{item.views || 0}</Text></View>
+                        </View>
                       </View>
-                      <Text style={styles.orderTitle}>{item.title}</Text>
+                      <Text style={styles.orderTitle}>{item.title}</Text><Text style={styles.orderPrice}>{item.price} Kč</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
                 <Footer />
               </>
             )}
+
             {view === 'AUTH' && (
-                <View style={[styles.card, {marginTop: 50}]}>
-                    <TextInput style={styles.input} placeholder="Email" placeholderTextColor="#666" value={emailAuth} onChangeText={setEmailAuth} />
-                    <TextInput style={styles.input} placeholder="Heslo" secureTextEntry placeholderTextColor="#666" value={passwordAuth} onChangeText={setPasswordAuth} />
-                    <TouchableOpacity style={styles.goldBtn} onPress={handleAuth}><Text style={styles.goldBtnText}>PŘIHLÁSIT</Text></TouchableOpacity>
-                    <TouchableOpacity onPress={() => setAuthMode(authMode === 'LOGIN' ? 'REGISTER' : 'LOGIN')}><Text style={{color: '#FFD700', marginTop: 20, textAlign: 'center'}}>Změnit na {authMode === 'LOGIN' ? 'Registraci' : 'Přihlášení'}</Text></TouchableOpacity>
+              <View style={{paddingTop: 40, alignItems: 'center', width: '100%'}}>
+                <View style={styles.card}>
+                  <Text style={styles.formTitle}>{authMode === 'LOGIN' ? 'Přihlášení' : 'Registrace'}</Text>
+                  <TextInput style={[styles.input, {marginTop: 20}]} placeholder="Email" placeholderTextColor="#666" value={emailAuth} onChangeText={setEmailAuth} autoCapitalize="none" />
+                  <TextInput style={styles.input} placeholder="Heslo" secureTextEntry placeholderTextColor="#666" value={passwordAuth} onChangeText={setPasswordAuth} />
+                  <TouchableOpacity style={styles.goldBtn} onPress={handleAuth}><Text style={styles.goldBtnText}>POKRAČOVAT</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={() => setAuthMode(authMode === 'LOGIN' ? 'REGISTER' : 'LOGIN')} style={{marginTop: 20}}><Text style={{color: '#FFD700', textAlign: 'center'}}>Změnit na {authMode === 'LOGIN' ? 'Registraci' : 'Přihlášení'}</Text></TouchableOpacity>
                 </View>
+                <Footer />
+              </View>
             )}
+
             {view === 'PROFILE' && (
-                <View style={[styles.card, {marginTop: 50}]}>
-                    <Text style={styles.label}>Rok narození:</Text>
-                    <TextInput style={styles.input} value={birthYear} onChangeText={setBirthYear} placeholder="1995" keyboardType="numeric" placeholderTextColor="#666" />
-                    <TouchableOpacity style={styles.goldBtn} onPress={handleSaveProfile}><Text style={styles.goldBtnText}>ULOŽIT</Text></TouchableOpacity>
-                    <TouchableOpacity onPress={() => setView('FORM')}><Text style={{color: '#888', marginTop: 20, textAlign: 'center'}}>Zpět</Text></TouchableOpacity>
-                </View>
+               <View style={{paddingTop: 40, alignItems: 'center', width: '100%'}}>
+                 <View style={styles.card}>
+                    <Text style={styles.formTitle}>Můj profil</Text>
+                    <Text style={styles.label}>Email:</Text><TextInput style={[styles.input, {color: '#888'}]} value={currentUser?.email || ''} editable={false} />
+                    <Text style={styles.label}>Rok narození:</Text><TextInput style={styles.input} value={birthYear} onChangeText={setBirthYear} placeholder="1995" keyboardType="numeric" placeholderTextColor="#666" />
+                    <TouchableOpacity style={styles.goldBtn} onPress={handleSaveProfile}><Text style={styles.goldBtnText}>ULOŽIT ZMĚNY</Text></TouchableOpacity>
+                    <TouchableOpacity onPress={() => setView('FORM')} style={{marginTop: 20}}><Text style={{color: '#CCC', textAlign: 'center'}}>Zpět</Text></TouchableOpacity>
+                 </View>
+                 <Footer />
+               </View>
             )}
           </ScrollView>
 
           <Modal visible={!!selectedOrder} animationType="slide" transparent>
             <View style={styles.modalOverlay}><View style={styles.modalContent}>
                 <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedOrder(null)}><Ionicons name="close" size={28} color="#FFD700" /></TouchableOpacity>
-                {selectedOrder && (<ScrollView>
+                {selectedOrder && (<ScrollView showsVerticalScrollIndicator={false}>
+                    {selectedOrder.status === 'PENDING' && <Text style={{color: '#FFA500', fontWeight: 'bold', marginBottom: 10}}>⚠️ Tato zakázka čeká na schválení</Text>}
+                    <Text style={styles.modalCats}>{selectedOrder.categories.join(' • ')}</Text>
                     <Text style={styles.modalTitle}>{selectedOrder.title}</Text>
-                    <Text style={styles.modalDesc}>{selectedOrder.description}</Text>
-                    <Text style={styles.infoValue}>Kontakt: {maskContact(selectedOrder.phone, 'phone')}</Text>
+                    <View style={styles.modalInfoRow}>
+                       <View style={styles.infoBox}><Text style={styles.infoLabel}>ROZPOČET</Text><Text style={styles.infoValue}>{selectedOrder.price} Kč</Text></View>
+                       <View style={styles.infoBox}><Text style={styles.infoLabel}>ZOBRAZENÍ</Text><Text style={styles.infoValue}>{selectedOrder.views}</Text></View>
+                    </View>
+                    <Text style={styles.infoLabel}>POPIS:</Text><Text style={styles.modalDesc}>{selectedOrder.description}</Text>
+                    <TouchableOpacity style={[styles.callBtn, (!currentUser || !isProfileComplete()) && {backgroundColor: '#222'}]} onPress={() => { if(!currentUser) return setView('AUTH'); if(!isProfileComplete()) return setView('PROFILE'); Alert.alert("Kontakt", selectedOrder.phone); }}>
+                      <Ionicons name="call" size={20} color={(currentUser && isProfileComplete()) ? "#000" : "#555"} />
+                      <Text style={[styles.callBtnText, (!currentUser || !isProfileComplete()) && {color: '#555'}]}>{maskContact(selectedOrder.phone, 'phone')}</Text>
+                    </TouchableOpacity>
                     
-                    {currentUser?.email === ADMIN_EMAIL && selectedOrder.status === 'PENDING' && (
-                      <TouchableOpacity 
-                        style={[styles.goldBtn, {marginTop: 20, backgroundColor: '#00BFFF'}]} 
-                        onPress={async()=>{
-                          await updateDoc(doc(db,"poptavky",selectedOrder.id), {status: 'APPROVED'}); 
-                          setSelectedOrder(null);
-                        }}>
-                        <Text style={styles.goldBtnText}>SCHVÁLIT ZAKÁZKU</Text>
-                      </TouchableOpacity>
-                    )}
                     {currentUser?.email === ADMIN_EMAIL && (
-                      <TouchableOpacity 
-                        style={{marginTop: 15, padding: 10, borderColor: 'red', borderWidth: 1, borderRadius: 10}} 
-                        onPress={async()=>{await deleteDoc(doc(db,"poptavky",selectedOrder.id)); setSelectedOrder(null);}}>
-                        <Text style={{color: 'red', textAlign: 'center'}}>Smazat</Text>
-                      </TouchableOpacity>
+                      <View style={{marginTop: 30, gap: 15}}>
+                        {selectedOrder.status === 'PENDING' && (
+                          <TouchableOpacity style={[styles.callBtn, {backgroundColor: '#00BFFF'}]} onPress={async()=>{await updateDoc(doc(db,"poptavky",selectedOrder.id), {status: 'APPROVED'}); setSelectedOrder(null);}}>
+                            <Text style={styles.callBtnText}>Schválit zakázku</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity style={{padding: 15, borderWidth: 1, borderColor: '#FF4444', borderRadius: 15, alignItems: 'center'}} onPress={async()=>{await deleteDoc(doc(db,"poptavky",selectedOrder.id)); setSelectedOrder(null);}}>
+                          <Text style={{color:'#FF4444', fontWeight:'bold'}}>Smazat</Text>
+                        </TouchableOpacity>
+                      </View>
                     )}
-                </ScrollView>)}
+                  </ScrollView>)}
             </View></View>
           </Modal>
         </KeyboardAvoidingView>
@@ -311,39 +353,61 @@ export default function App() {
 
 const styles = StyleSheet.create({
   backgroundImage: { flex: 1, backgroundColor: '#000' },
-  darkOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)' },
-  header: { paddingTop: 50, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  logo: { fontSize: 20, fontWeight: '900', color: '#FFF' },
-  profileBtn: { padding: 10, backgroundColor: '#111', borderRadius: 10, borderWidth: 1, borderColor: '#333' },
-  floatingMenu: { position: 'absolute', top: 100, right: 20, width: 200, backgroundColor: '#111', borderRadius: 15, padding: 20, borderWidth: 1, borderColor: '#FFD700', zIndex: 100 },
-  menuText: { color: '#FFF', fontSize: 16 },
-  scrollContent: { paddingBottom: 100, alignItems: 'center' },
-  emblemContainer: { marginVertical: 30 },
-  card: { backgroundColor: 'rgba(15, 15, 20, 0.9)', width: '90%', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#333' },
-  formHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-  formTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
+  darkOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.45)' },
+  header: { paddingTop: 60, paddingHorizontal: 25, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 100 },
+  logo: { fontSize: 22, fontWeight: '900', color: '#FFF' },
+  profileBtn: { padding: 10, backgroundColor: 'rgba(20, 20, 20, 0.9)', borderRadius: 12, borderWidth: 1, borderColor: '#444' },
+  badge: { position: 'absolute', top: -2, right: -2, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF4444' },
+  menuCloseOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 101 },
+  floatingMenu: { position: 'absolute', top: 60, right: 25, width: 250, backgroundColor: '#111', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#FFD700', zIndex: 102 },
+  menuTitleText: { color: '#FFD700', fontSize: 10, fontWeight: 'bold', textAlign: 'center', marginBottom: 5 },
+  menuDivider: { height: 1, backgroundColor: '#333', marginVertical: 15 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
+  menuIcon: { marginRight: 15 },
+  menuText: { color: '#FFF', fontSize: 14 },
+  warningText: { color: '#FFD700', fontSize: 10 },
+  scrollContent: { paddingBottom: 60, alignItems: 'center' },
+  emblemContainer: { marginVertical: 20, alignItems: 'center' },
+  glowIcon: { textShadowColor: '#FFD700', textShadowRadius: 20 },
+  card: { backgroundColor: 'rgba(15, 15, 20, 0.95)', width: '92%', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#333' },
+  neonBlueBorder: { borderWidth: 1.5, borderColor: '#00BFFF' },
+  formHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  formTitle: { color: '#FFF', fontSize: 20, fontWeight: 'bold' },
   formBody: { marginTop: 15 },
-  input: { backgroundColor: '#000', color: '#FFF', borderRadius: 10, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#333' },
-  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 15 },
-  chip: { padding: 8, borderRadius: 5, backgroundColor: '#222' },
+  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 15 },
+  chip: { padding: 10, borderRadius: 8, backgroundColor: '#222', borderWidth: 1, borderColor: '#444' },
   chipActive: { backgroundColor: '#FFD700' },
-  chipText: { color: '#888', fontSize: 10 },
-  goldBtn: { backgroundColor: '#FFD700', padding: 15, borderRadius: 10, alignItems: 'center' },
+  chipText: { color: '#CCC', fontSize: 11, fontWeight: 'bold' },
+  label: { color: '#888', marginBottom: 5, marginTop: 10, fontSize: 12 },
+  input: { backgroundColor: '#111', color: '#FFF', borderRadius: 12, padding: 15, marginBottom: 12, borderWidth: 1, borderColor: '#333' },
+  goldBtn: { backgroundColor: '#FFD700', padding: 18, borderRadius: 15, alignItems: 'center' },
   goldBtnText: { color: '#000', fontWeight: 'bold' },
-  listSection: { width: '90%', marginTop: 30 },
+  statsContainer: { flexDirection: 'row', width: '92%', backgroundColor: 'rgba(15,15,20,0.9)', borderRadius: 20, padding: 15, marginTop: 20, borderWidth:1, borderColor:'#333' },
+  statBox: { flex: 1, alignItems: 'center' },
+  statLabel: { color: '#888', fontSize: 11 },
+  statValue: { color: '#00BFFF', fontSize: 20, fontWeight: 'bold' },
+  listSection: { width: '92%', marginTop: 25 },
   sectionTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold', marginBottom: 15 },
-  orderCard: { backgroundColor: '#111', borderRadius: 15, padding: 15, marginBottom: 10, borderWidth: 1, borderColor: '#222' },
-  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
-  orderCats: { color: '#FFD700', fontSize: 10 },
+  orderCard: { backgroundColor: 'rgba(15, 15, 20, 0.9)', borderRadius: 18, padding: 18, marginBottom: 15, borderWidth: 1, borderColor: '#333' },
+  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  orderCats: { color: '#FFD700', fontSize: 10, fontWeight: 'bold' },
+  viewsBadge: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  viewsText: { color: '#00BFFF', fontSize: 12 },
   orderTitle: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#111', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, height: '80%' },
-  closeBtn: { alignSelf: 'flex-end' },
-  modalTitle: { color: '#FFF', fontSize: 22, fontWeight: 'bold' },
-  modalDesc: { color: '#AAA', fontSize: 16, marginVertical: 15 },
-  infoValue: { color: '#FFD700', fontSize: 16, fontWeight: 'bold' },
-  footerContainer: { marginTop: 50, alignItems: 'center', width: '100%' },
-  footerDivider: { width: '30%', height: 1, backgroundColor: '#FFD700', marginBottom: 10 },
-  footerText: { color: '#555', fontSize: 10 },
-  label: { color: '#888', marginBottom: 5 }
+  orderPrice: { color: '#FFD700', fontSize: 14, marginVertical: 5 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#111', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, height: '85%' },
+  closeBtn: { alignSelf: 'flex-end', padding: 5 },
+  modalCats: { color: '#00BFFF', fontSize: 12 },
+  modalTitle: { color: '#FFF', fontSize: 24, fontWeight: 'bold', marginVertical: 10 },
+  modalInfoRow: { flexDirection: 'row', gap: 15, marginVertical: 20 },
+  infoBox: { flex: 1, backgroundColor: '#1A1A24', padding: 15, borderRadius: 15, borderWidth: 1, borderColor: '#333' },
+  infoLabel: { color: '#888', fontSize: 10, fontWeight: 'bold', marginBottom: 5 },
+  infoValue: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
+  modalDesc: { color: '#CCC', fontSize: 16, lineHeight: 24, marginBottom: 20 },
+  callBtn: { backgroundColor: '#FFD700', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 18, borderRadius: 15, gap: 10 },
+  callBtnText: { color: '#000', fontWeight: 'bold', fontSize: 16 },
+  footerContainer: { marginTop: 40, paddingBottom: 20, paddingHorizontal: 20, alignItems: 'center' },
+  footerDivider: { width: '40%', height: 1, backgroundColor: '#FFD700', marginBottom: 20 },
+  footerText: { color: '#888', fontSize: 12, textAlign: 'center', lineHeight: 18 }
 });
