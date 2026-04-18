@@ -165,8 +165,20 @@ categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus
 
 if (initialStatus === 'PENDING') { 
 try { 
-await emailjs.send('service_9flz7xf', 'template_dsxyb8h', { title, phone, desc: desc || "Bez popisu", email: emailOrder || "neuvedeno" }, 'klUWyK6E3q0jVSWat'); 
-} catch (mailErr) { console.error('MAIL FAIL', mailErr); } 
+await emailjs.send( 
+'service_9flz7xf', 
+'template_dsxyb8h', 
+{ 
+title: title, 
+phone: phone, 
+desc: desc || "Bez popisu", 
+email: emailOrder || "neuvedeno" 
+}, 
+'klUWyK6E3q0jVSWat' 
+); 
+} catch (mailErr) { 
+console.error('MAIL FAIL', mailErr); 
+} 
 } 
 
 setTitle(''); setDesc(''); setPrice(''); setPhone(''); setEmailOrder(''); setSelectedCats([]); 
@@ -194,10 +206,10 @@ const visibleOrders = orders.filter(o => o.status === 'APPROVED' || currentUser?
 
 return ( 
 <ImageBackground 
-// СПРАВЖНЯ ЧЕРВОНА ЦЕГЛА (RED BRICK WALL)
-source={{ uri: 'https://images.unsplash.com/photo-1590059132213-f61548cc2ef5?q=80&w=1000&auto=format&fit=crop' }} 
+// НОВА ЧІТКА ЧЕРВОНА ЦЕГЛА
+source={{ uri: 'https://images.unsplash.com/photo-1523464860987-991c49980d46?q=80&w=2000' }} 
 style={styles.backgroundImage} 
-imageStyle={{ opacity: 1 }} 
+imageStyle={{ opacity: 1 }} // Максимальна яскравість цегли
 > 
 <View style={styles.darkOverlay}> 
 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{flex: 1}}> 
@@ -306,7 +318,7 @@ imageStyle={{ opacity: 1 }}
 <Text style={styles.label}>Email:</Text><TextInput style={[styles.input, {color: '#888'}]} value={currentUser?.email || ''} editable={false} /> 
 <Text style={styles.label}>Rok narození:</Text><TextInput style={styles.input} value={birthYear} onChangeText={setBirthYear} placeholder="1995" keyboardType="numeric" placeholderTextColor="#666" /> 
 {userData?.role === 'MASTER' && <><Text style={styles.label}>IČO:</Text><TextInput style={styles.input} value={profileIco} onChangeText={setProfileIco} placeholder="Zadejte IČO" placeholderTextColor="#666" /></>} 
-<TouchableOpacity style={styles.goldBtn} onPress={handleSaveProfile}><Text style={styles.goldBtnText}>ULOŽIT ZMĚNY</Text></TouchableOpacity> 
+<TouchableOpacity style={styles.goldBtn} onPress={handleSaveProfile}><Text style={styles.goldBtnText}>ULOŽIT ЗМĚNY</Text></TouchableOpacity> 
 <TouchableOpacity onPress={() => setView('FORM')} style={{marginTop: 20}}><Text style={{color: '#CCC', textAlign: 'center'}}>Zpět</Text></TouchableOpacity> 
 </View> 
 <Footer /> 
@@ -379,7 +391,7 @@ Alert.alert("Kontakt", "Telefon: " + selectedOrder.phone);
 
 const styles = StyleSheet.create({ 
 backgroundImage: { flex: 1, backgroundColor: '#000' }, 
-darkOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.2)' }, 
+darkOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.15)' }, // Більш світле затемнення
 header: { paddingTop: 60, paddingHorizontal: 25, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 100 }, 
 logo: { fontSize: 22, fontWeight: '900', color: '#FFF' }, 
 profileBtn: { padding: 10, backgroundColor: 'rgba(20, 20, 20, 0.9)', borderRadius: 12, borderWidth: 1, borderColor: '#444' }, 
