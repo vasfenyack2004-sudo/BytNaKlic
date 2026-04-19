@@ -16,6 +16,9 @@ import {
   View
 } from 'react-native';
 
+// ДОДАНО ІМПОРТ МАПИ
+import MapView, { Marker } from 'react-native-maps';
+
 // Firebase Config 
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -52,13 +55,16 @@ const ADMIN_EMAIL = 'vas.fenyack2004@gmail.com';
 interface Poptavka { 
 id: string; title: string; description: string; 
 price: string; phone: string; email?: string; 
-address?: string; // Додано в інтерфейс
+address?: string; 
 categories: string[]; createdAt: any; views: number; 
 status?: 'PENDING' | 'APPROVED'; 
+lat?: number; // Координати для мапи
+lng?: number; // Координати для мапи
 } 
 
 export default function App() { 
 const [view, setView] = useState<'FORM' | 'AUTH' | 'PROFILE'>('FORM'); 
+const [viewMode, setViewMode] = useState<'LIST' | 'MAP'>('LIST'); // НОВЕ: Стан для перемикача Мапи
 const [authMode, setAuthMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN'); 
 const [currentUser, setCurrentUser] = useState<User | null>(null); 
 const [userData, setUserData] = useState<any>(null); 
@@ -80,7 +86,7 @@ const [desc, setDesc] = useState('');
 const [price, setPrice] = useState(''); 
 const [phone, setPhone] = useState(''); 
 const [emailOrder, setEmailOrder] = useState(''); 
-const [address, setAddress] = useState(''); // Стан для адреси
+const [address, setAddress] = useState(''); 
 
 const CATEGORIES = ['ZEDNÍK', 'MALÍŘ', 'STAVEBNÍK', 'ELEKTRIKÁŘ', 'INSTALATÉR', 'PODLAHÁŘ', 'ÚKLID', 'ZAHRADA', 'STĚHOVÁNÍ']; 
 
@@ -156,37 +162,23 @@ finally { setLoading(false); }
 }; 
 
 const handleSubmitOrder = async () => { 
-// Перевірка на адресу
 if (!title || !phone || !address || selectedCats.length === 0) return Alert.alert("Pozor", "Doplňte název, adresu, telefon a kategorii."); 
 setLoading(true); 
 const initialStatus = currentUser?.email === ADMIN_EMAIL ? 'APPROVED' : 'PENDING'; 
 try { 
 await addDoc(collection(db, "poptavky"), { 
 title, description: desc, price, phone, 
-address, // Додано адресу
+address, 
 email: emailOrder || "neuvedeno", 
 categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus,
-// Симуляція координат для майбутньої карти
 lat: 50.0755 + (Math.random() - 0.5) * 0.1,
 lng: 14.4378 + (Math.random() - 0.5) * 0.1
 }); 
 
 if (initialStatus === 'PENDING') { 
 try { 
-await emailjs.send( 
-'service_9flz7xf', 
-'template_dsxyb8h', 
-{ 
-title: title, 
-phone: phone, 
-desc: desc || "Bez popisu", 
-email: emailOrder || "neuvedeno" 
-}, 
-'klUWyK6E3q0jVSWat' 
-); 
-} catch (mailErr) { 
-console.error('MAIL FAIL', mailErr); 
-} 
+await emailjs.send('service_9flz7xf', 'template_dsxyb8h', { title: title, phone: phone, desc: desc || "Bez popisu", email: emailOrder || "neuvedeno" }, 'klUWyK6E3q0jVSWat'); 
+} catch (mailErr) { console.error('MAIL FAIL', mailErr); } 
 } 
 
 setTitle(''); setDesc(''); setPrice(''); setPhone(''); setEmailOrder(''); setAddress(''); setSelectedCats([]); 
@@ -200,7 +192,6 @@ setLoading(false);
 } 
 }; 
 
-// Допоміжна функція для форматування дати публікації
 const formatDate = (dateObj: any) => {
   if (!dateObj || !dateObj.seconds) return 'Dnes';
   const d = new Date(dateObj.seconds * 1000);
@@ -220,11 +211,7 @@ const Footer = () => (
 const visibleOrders = orders.filter(o => o.status === 'APPROVED' || currentUser?.email === ADMIN_EMAIL); 
 
 return ( 
-<ImageBackground 
-source={{ uri: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=2000&auto=format&fit=crop' }} 
-style={styles.backgroundImage} 
-imageStyle={{ opacity: 1 }} 
-> 
+<ImageBackground source={{ uri: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=2000&auto=format&fit=crop' }} style={styles.backgroundImage} imageStyle={{ opacity: 1 }}> 
 <View style={styles.darkOverlay}> 
 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{flex: 1}}> 
 <StatusBar barStyle="light-content" /> 
@@ -270,10 +257,7 @@ imageStyle={{ opacity: 1 }}
 {isFormExpanded && ( 
 <View style={styles.formBody}> 
 <TextInput style={styles.input} placeholder="Název zakázky" placeholderTextColor="#999" value={title} onChangeText={setTitle} /> 
-
-{/* Додано поле для адреси */}
 <TextInput style={styles.input} placeholder="Adresa (Ulice, Město)" placeholderTextColor="#999" value={address} onChangeText={setAddress} /> 
-
 <TextInput style={[styles.input, {height: 80}]} placeholder="Detailní popis..." multiline placeholderTextColor="#999" value={desc} onChangeText={setDesc} /> 
 <TextInput style={styles.input} placeholder="Rozpočet (Kč)" keyboardType="numeric" placeholderTextColor="#999" value={price} onChangeText={setPrice} /> 
 <TextInput style={styles.input} placeholder="Telefon" keyboardType="phone-pad" placeholderTextColor="#999" value={phone} onChangeText={setPhone} /> 
@@ -291,22 +275,65 @@ imageStyle={{ opacity: 1 }}
 </View> 
 
 <View style={styles.listSection}> 
-<Text style={styles.sectionTitle}>Aktuální zakázky</Text> 
-{visibleOrders.map((item) => ( 
-<TouchableOpacity key={item.id} style={styles.orderCard} onPress={() => handleOpenOrder(item)}> 
-<View style={styles.orderHeader}> 
-<Text style={styles.orderCats}>{item.categories[0]}</Text> 
-<View style={{flexDirection: 'row', gap: 10, alignItems: 'center'}}> 
-<Text style={styles.orderDate}>{formatDate(item.createdAt)}</Text>
-{item.status === 'PENDING' && <Text style={{color: '#FFA500', fontSize: 10, fontWeight: 'bold'}}>⏳ ČEKÁ</Text>} 
-<View style={styles.viewsBadge}><Ionicons name="eye-outline" size={14} color="#00BFFF" /><Text style={styles.viewsText}>{item.views || 0}</Text></View> 
-</View> 
-</View> 
-<Text style={styles.orderTitle}>{item.title}</Text><Text style={styles.orderPrice}>{item.price} Kč</Text> 
-{/* Відображення адреси в списку (за бажанням можна прибрати) */}
-{item.address && <Text style={{color: '#888', fontSize: 11, marginTop: 5}}><Ionicons name="location-outline" size={12} color="#888" /> {item.address}</Text>}
-</TouchableOpacity> 
-))} 
+  {/* НОВИЙ ЗАГОЛОВОК З ПЕРЕМИКАЧЕМ */}
+  <View style={styles.sectionHeader}>
+    <Text style={styles.sectionTitle}>Aktuální zakázky</Text>
+    <View style={styles.toggleContainer}>
+      <TouchableOpacity onPress={() => setViewMode('LIST')} style={[styles.toggleBtn, viewMode === 'LIST' && styles.toggleBtnActive]}>
+        <Ionicons name="list" size={14} color={viewMode === 'LIST' ? '#000' : '#888'} />
+        <Text style={[styles.toggleText, viewMode === 'LIST' && {color: '#000'}]}>Seznam</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={() => setViewMode('MAP')} style={[styles.toggleBtn, viewMode === 'MAP' && styles.toggleBtnActive]}>
+        <Ionicons name="map" size={14} color={viewMode === 'MAP' ? '#000' : '#888'} />
+        <Text style={[styles.toggleText, viewMode === 'MAP' && {color: '#000'}]}>Mapa</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+
+  {/* ЛОГІКА ВІДОБРАЖЕННЯ СПИСОК АБО МАПА */}
+  {viewMode === 'LIST' ? (
+    visibleOrders.map((item) => ( 
+      <TouchableOpacity key={item.id} style={styles.orderCard} onPress={() => handleOpenOrder(item)}> 
+        <View style={styles.orderHeader}> 
+          <Text style={styles.orderCats}>{item.categories[0]}</Text> 
+          <View style={{flexDirection: 'row', gap: 10, alignItems: 'center'}}> 
+            <Text style={styles.orderDate}>{formatDate(item.createdAt)}</Text>
+            {item.status === 'PENDING' && <Text style={{color: '#FFA500', fontSize: 10, fontWeight: 'bold'}}>⏳ ČEKÁ</Text>} 
+            <View style={styles.viewsBadge}><Ionicons name="eye-outline" size={14} color="#00BFFF" /><Text style={styles.viewsText}>{item.views || 0}</Text></View> 
+          </View> 
+        </View> 
+        <Text style={styles.orderTitle}>{item.title}</Text><Text style={styles.orderPrice}>{item.price} Kč</Text> 
+        {item.address && <Text style={{color: '#888', fontSize: 11, marginTop: 5}}><Ionicons name="location-outline" size={12} color="#888" /> {item.address}</Text>}
+      </TouchableOpacity> 
+    ))
+  ) : (
+    <View style={styles.mapContainer}>
+      <MapView
+        style={styles.map}
+        initialRegion={{
+          latitude: 50.0755, // Центр Праги
+          longitude: 14.4378,
+          latitudeDelta: 0.1,
+          longitudeDelta: 0.1,
+        }}
+        customMapStyle={darkMapStyle}
+      >
+        {visibleOrders.map((order) => {
+          if (order.lat && order.lng) {
+            return (
+              <Marker
+                key={order.id}
+                coordinate={{ latitude: order.lat, longitude: order.lng }}
+                onPress={() => handleOpenOrder(order)}
+                pinColor="#FFD700" // Золотий пін
+              />
+            );
+          }
+          return null;
+        })}
+      </MapView>
+    </View>
+  )}
 </View> 
 <Footer /> 
 </> 
@@ -410,6 +437,16 @@ onPress={() => {
 ); 
 } 
 
+// ТЕМНИЙ СТИЛЬ МАПИ ДЛЯ ЕСТЕТИКИ
+const darkMapStyle = [
+  { "elementType": "geometry", "stylers": [{ "color": "#212121" }] },
+  { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
+  { "elementType": "labels.text.fill", "stylers": [{ "color": "#757575" }] },
+  { "elementType": "labels.text.stroke", "stylers": [{ "color": "#212121" }] },
+  { "featureType": "road", "elementType": "geometry.fill", "stylers": [{ "color": "#2c2c2c" }] },
+  { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#000000" }] }
+];
+
 const styles = StyleSheet.create({ 
 backgroundImage: { flex: 1, backgroundColor: '#000' }, 
 darkOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.4)' },
@@ -446,7 +483,15 @@ statBox: { flex: 1, alignItems: 'center' },
 statLabel: { color: '#888', fontSize: 11 }, 
 statValue: { color: '#00BFFF', fontSize: 20, fontWeight: 'bold' }, 
 listSection: { width: '92%', marginTop: 25 }, 
-sectionTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold', marginBottom: 15 }, 
+// НОВІ СТИЛІ ДЛЯ ПЕРЕМИКАЧА І МАПИ
+sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+sectionTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold' }, 
+toggleContainer: { flexDirection: 'row', backgroundColor: '#222', borderRadius: 10, padding: 4, borderWidth: 1, borderColor: '#333' },
+toggleBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, gap: 5 },
+toggleBtnActive: { backgroundColor: '#FFD700' },
+toggleText: { color: '#888', fontSize: 12, fontWeight: 'bold' },
+mapContainer: { height: 400, borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: '#333', marginBottom: 20 },
+map: { width: '100%', height: '100%' },
 orderCard: { backgroundColor: 'rgba(15, 15, 20, 0.9)', borderRadius: 18, padding: 18, marginBottom: 15, borderWidth: 1, borderColor: '#333' }, 
 orderHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }, 
 orderCats: { color: '#FFD700', fontSize: 10, fontWeight: 'bold' }, 
