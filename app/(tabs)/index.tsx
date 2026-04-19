@@ -16,17 +16,24 @@ import {
   View
 } from 'react-native';
 
-// БЕЗПЕЧНИЙ ІМПОРТ МАПИ ДЛЯ VERCEL
-let MapView: any = View;
-let Marker: any = View;
+// РОЗУМНИЙ ІМПОРТ МАПИ ДЛЯ ВСІХ ПЛАТФОРМ (Мобільні + Веб)
+let MapView: any;
+let Marker: any;
 
-if (Platform.OS !== 'web') {
-  try {
+try {
+  if (Platform.OS === 'web') {
+    // Вантажимо веб-версію для Vercel
+    MapView = require('@teovilla/react-native-web-maps').default;
+    Marker = require('@teovilla/react-native-web-maps').Marker;
+  } else {
+    // Вантажимо мобільну версію для iPhone/Android
     MapView = require('react-native-maps').default;
     Marker = require('react-native-maps').Marker;
-  } catch (e) {
-    console.log("Maps not installed");
   }
+} catch (e) {
+  // Фолбек, якщо бібліотеки не встановлені
+  MapView = View;
+  Marker = View;
 }
 
 // Firebase Config 
@@ -172,7 +179,7 @@ export default function App() {
   }; 
 
   const handleSubmitOrder = async () => { 
-    if (!title || !phone || !address || selectedCats.length === 0) return Alert.alert("Pozor", "Doplňte název, adresu, telefon a kategorii."); 
+    if (!title || !phone || !address || selectedCats.length === 0) return Alert.alert("Pozor", "Doplňte název, adresu, телефон a kategorii."); 
     setLoading(true); 
     const initialStatus = currentUser?.email === ADMIN_EMAIL ? 'APPROVED' : 'PENDING'; 
     try { 
@@ -214,7 +221,7 @@ export default function App() {
       <Text style={styles.footerText}> 
         © 2026 <Text style={{color: '#FFD700'}}>BytNaKlič</Text>. Premium Servis v ČR. 
       </Text> 
-      <Text style={styles.footerText}>Všechna práva vyhrazena.</Text> 
+      <Text style={styles.footerText}>Všechna práва vyhrazena.</Text> 
     </View> 
   ); 
 
@@ -316,12 +323,6 @@ export default function App() {
                     ))
                   ) : (
                     <View style={styles.mapContainer}>
-                      {Platform.OS === 'web' ? (
-                        <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111'}}>
-                          <Ionicons name="map-outline" size={40} color="#444" />
-                          <Text style={{color: '#888', marginTop: 10}}>Mapa je dostupна v mobilní verzi</Text>
-                        </View>
-                      ) : (
                         <MapView
                           style={styles.map}
                           initialRegion={{
@@ -341,7 +342,6 @@ export default function App() {
                             />
                           ))}
                         </MapView>
-                      )}
                     </View>
                   )}
                 </View> 
@@ -376,7 +376,7 @@ export default function App() {
                   <Text style={styles.label}>Email:</Text><TextInput style={[styles.input, {color: '#888'}]} value={currentUser?.email || ''} editable={false} /> 
                   <Text style={styles.label}>Rok narození:</Text><TextInput style={styles.input} value={birthYear} onChangeText={setBirthYear} placeholder="1995" keyboardType="numeric" placeholderTextColor="#666" /> 
                   {userData?.role === 'MASTER' && <><Text style={styles.label}>IČО:</Text><TextInput style={styles.input} value={profileIco} onChangeText={setProfileIco} placeholder="Zadejte IČO" placeholderTextColor="#666" /></>} 
-                  <TouchableOpacity style={styles.goldBtn} onPress={handleSaveProfile}><Text style={styles.goldBtnText}>ULOŽIT ZMĚNY</Text></TouchableOpacity> 
+                  <TouchableOpacity style={styles.goldBtn} onPress={handleSaveProfile}><Text style={styles.goldBtnText}>ULOЖIT ZMĚNY</Text></TouchableOpacity> 
                   <TouchableOpacity onPress={() => setView('FORM')} style={{marginTop: 20}}><Text style={{color: '#CCC', textAlign: 'center'}}>Zpět</Text></TouchableOpacity> 
                 </View> 
                 <Footer /> 
@@ -388,7 +388,7 @@ export default function App() {
             <View style={styles.modalOverlay}><View style={styles.modalContent}> 
               <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedOrder(null)}><Ionicons name="close" size={28} color="#FFD700" /></TouchableOpacity> 
               {selectedOrder && (<ScrollView showsVerticalScrollIndicator={false}> 
-                {selectedOrder.status === 'PENDING' && <Text style={{color: '#FFA500', fontWeight: 'bold', marginBottom: 10}}>⚠️ Tato zakázka čeká na schválení</Text>} 
+                {selectedOrder.status === 'PENDING' && <Text style={{color: '#FFA500', fontWeight: 'bold', marginBottom: 10}}>⚠️ Tato zakázka čeká на schválení</Text>} 
                 <Text style={styles.modalCats}>{selectedOrder.categories.join(' • ')}</Text> 
                 <Text style={styles.modalTitle}>{selectedOrder.title}</Text> 
                 <View style={styles.modalInfoRow}> 
@@ -403,7 +403,7 @@ export default function App() {
                   style={[styles.callBtn, (!currentUser || !isProfileComplete()) && {backgroundColor: '#222'}]} 
                   onPress={() => { 
                     if(!currentUser) { 
-                      Alert.alert("Nutná registrace", "Pro zobrazení kontaktu se musíte přihlásit.", [
+                      Alert.alert("Nutná registrace", "Pro zobrazení kontaktu se musíte nejdříve přihlásit.", [
                         { text: "Zavřít" }, { text: "Přihlásit se", onPress: () => { setSelectedOrder(null); setView('AUTH'); } }
                       ]); 
                       return; 
