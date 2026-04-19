@@ -16,7 +16,7 @@ import {
   View
 } from 'react-native';
 
-// РОЗУМНИЙ ІМПОРТ МАПИ ДЛЯ ВСІХ ПЛАТФОРМ (Мобільні + Веб)
+// РОЗУМНИЙ ІМПОРТ МАПИ ДЛЯ ВСІХ ПЛАТФОРМ
 let MapView: any;
 let Marker: any;
 
@@ -88,29 +88,24 @@ interface Poptavka {
 } 
 
 export default function App() { 
-  // Навігація та режими
   const [view, setView] = useState<'FORM' | 'AUTH' | 'PROFILE' | 'DASHBOARD'>('FORM'); 
   const [viewMode, setViewMode] = useState<'LIST' | 'MAP'>('LIST'); 
   const [authMode, setAuthMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN'); 
   
-  // Користувач
   const [currentUser, setCurrentUser] = useState<User | null>(null); 
   const [userData, setUserData] = useState<any>(null); 
   const [loading, setLoading] = useState(false); 
   const [isMenuOpen, setIsMenuOpen] = useState(false); 
   const [isFormExpanded, setIsFormExpanded] = useState(true); 
   
-  // Замовлення
   const [orders, setOrders] = useState<Poptavka[]>([]); 
   const [selectedOrder, setSelectedOrder] = useState<Poptavka | null>(null); 
   
-  // Авторизація
   const [emailAuth, setEmailAuth] = useState(''); 
   const [passwordAuth, setPasswordAuth] = useState(''); 
   const [registerRole, setRegisterRole] = useState<'MASTER' | 'CLIENT'>('MASTER'); 
   const [regIco, setRegIco] = useState(''); 
   
-  // Профіль
   const [profileIco, setProfileIco] = useState(''); 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -122,7 +117,6 @@ export default function App() {
   const [wantsPush, setWantsPush] = useState<boolean>(false);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
-  // Форма створення замовлення
   const [selectedCats, setSelectedCats] = useState<string[]>([]); 
   const [title, setTitle] = useState(''); 
   const [desc, setDesc] = useState(''); 
@@ -317,32 +311,73 @@ export default function App() {
     } 
   }; 
 
-  // --- ЛОГІКА ДЛЯ СУПЕР-СИСТЕМИ ---
+  // --- ЛОГІКА ДЛЯ СУПЕР-СИСТЕМИ З ПІДТРИМКОЮ WEB ---
   const handleApplyForJob = async (orderId: string) => {
-    if (!currentUser) return setView('AUTH');
-    if (!isProfileComplete()) return Alert.alert("Profil", "Nejdříve vyplňte svůj profil (včetně specializace).");
+    if (!currentUser) {
+      setView('AUTH');
+      setSelectedOrder(null);
+      return;
+    }
     
-    Alert.alert(
-      "Zájem o práci",
-      "Nejdříve kontaktujte zákazníka telefonicky. Pokud jste se dohodli, potvrďte zájem v aplikaci.",
-      [
-        { text: "Zrušit", style: "cancel" },
-        { text: "Potvrdit zájem", onPress: async () => {
-            const masterData = {
-              uid: currentUser.uid,
-              name: `${userData.firstName} ${userData.lastName}`,
-              rating: userData.rating || 5.0
-            };
-            
-            await updateDoc(doc(db, "poptavky", orderId), { 
-              applicants: arrayUnion(masterData) 
-            });
-            
-            Alert.alert("Odesláno", "Váš zájem byl odeslán zákazníkovi. Sledujte záložku 'Moje aktivity'.");
-            setSelectedOrder(null);
-        }}
-      ]
-    );
+    if (!isProfileComplete()) {
+      Alert.alert("Profil", "Nejdříve vyplňte svůj profil (včetně specializace).");
+      setView('PROFILE');
+      setSelectedOrder(null);
+      return;
+    }
+    
+    const applyAction = async () => {
+      const masterData = {
+        uid: currentUser.uid,
+        name: `${userData.firstName} ${userData.lastName}`,
+        rating: userData.rating || 5.0
+      };
+      await updateDoc(doc(db, "poptavky", orderId), { 
+        applicants: arrayUnion(masterData) 
+      });
+      setSelectedOrder(null);
+    };
+
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm("Zájem o práci\n\nNejdříve kontaktujte zákazníka telefonicky. Pokud jste se dohodli, potvrďte zájem v aplikaci. Chcete pokračovat?");
+      if (confirmed) {
+        await applyAction();
+        window.alert("Váš zájem byl odeslán zákazníkovi. Sledujte záložku 'Moje aktivity'.");
+      }
+    } else {
+      Alert.alert(
+        "Zájem o práci",
+        "Nejdříve kontaktujte zákazníka telefonicky. Pokud jste se dohodli, potvrďte zájem v aplikaci.",
+        [
+          { text: "Zrušit", style: "cancel" },
+          { text: "Potvrdit zájem", onPress: async () => {
+              await applyAction();
+              Alert.alert("Odesláno", "Váš zájem byl odeslán zákazníkovi. Sledujte záložku 'Moje aktivity'.");
+          }}
+        ]
+      );
+    }
+  };
+
+  const handleCallClick = () => {
+    if (!currentUser) { 
+      if (Platform.OS === 'web') {
+        const ok = window.confirm("Nutná registrace\n\nPro zobrazení kontaktu se musíte nejdříve přihlásit. Přejít na přihlášení?");
+        if (ok) { setSelectedOrder(null); setView('AUTH'); }
+      } else {
+        Alert.alert("Nutná registrace", "Pro zobrazení kontaktu se musíte nejdříve přihlásit.", [
+          { text: "Zavřít", style: "cancel" }, 
+          { text: "Přihlásit se", onPress: () => { setSelectedOrder(null); setView('AUTH'); } }
+        ]); 
+      }
+      return; 
+    } 
+    if (!isProfileComplete()) { 
+      Alert.alert("Profil není kompletní", "Vyplňte celý profil pro zobrazení kontaktu."); 
+      setView('PROFILE'); setSelectedOrder(null); 
+      return; 
+    } 
+    Alert.alert("Kontakt", "Telefon: " + selectedOrder?.phone); 
   };
 
   const handleApproveWorker = async (orderId: string, workerId: string) => {
@@ -386,8 +421,6 @@ export default function App() {
   const myZakazky = orders.filter(o => o.ownerId === currentUser?.uid);
   const myPrace = orders.filter(o => o.workerId === currentUser?.uid || o.applicants?.some(a => a.uid === currentUser?.uid));
 
-  // --- ВИПРАВЛЕНІ ХЕЛПЕРИ ДЛЯ UI СТАТУСІВ ---
-  // ВАЖЛИВО: Кольори повинні мати 6 символів (напр. #888888), щоб прозорість +20 працювала без помилок
   const getStatusBadge = (status: string) => {
     switch(status) {
       case 'PENDING': return { text: '⏳ ČEKÁ NA SCHVÁLENÍ', color: '#888888' };
@@ -847,7 +880,7 @@ export default function App() {
                     {selectedOrder.ownerId === currentUser?.uid && selectedOrder.status === 'APPROVED' && selectedOrder.applicants && selectedOrder.applicants.length > 0 && (
                       <View style={{marginTop: 20, marginBottom: 20}}>
                         <Text style={{color: '#FFD700', marginBottom: 10, fontWeight: 'bold'}}>Zájemci o tuto práci:</Text>
-                        {selectedOrder.applicants?.map((applicant: any) => (
+                        {selectedOrder.applicants.map((applicant: any) => (
                           <TouchableOpacity 
                             key={applicant.uid} 
                             style={styles.applicantCard} 
@@ -855,7 +888,7 @@ export default function App() {
                           >
                             <View>
                               <Text style={{color: '#FFF', fontWeight: 'bold'}}>{applicant.name}</Text>
-                              <Text style={{color: '#FFD700', fontSize: 12}}>⭐️ {Number(applicant.rating || 5).toFixed(1)}</Text>
+                              <Text style={{color: '#FFD700', fontSize: 12}}>⭐️ {Number(applicant.rating || 5.0).toFixed(1)}</Text>
                             </View>
                             <Text style={{color: '#00BFFF', fontWeight: 'bold'}}>Vybrat mistra</Text>
                           </TouchableOpacity>
@@ -865,20 +898,7 @@ export default function App() {
 
                     <TouchableOpacity 
                       style={[styles.callBtn, (!currentUser || !isProfileComplete()) ? {backgroundColor: '#222'} : {backgroundColor: '#444'}]} 
-                      onPress={() => { 
-                        if(!currentUser) { 
-                          Alert.alert("Nutná registrace", "Pro zobrazení kontaktu se musíte nejdříve přihlásit.", [
-                            { text: "Zavřít" }, { text: "Přihlásit se", onPress: () => { setSelectedOrder(null); setView('AUTH'); } }
-                          ]); 
-                          return; 
-                        } 
-                        if(!isProfileComplete()) { 
-                          Alert.alert("Profil není kompletní", "Vyplňte celý profil pro zobrazení kontaktu."); 
-                          setView('PROFILE'); setSelectedOrder(null); 
-                          return; 
-                        } 
-                        Alert.alert("Kontakt", "Telefon: " + selectedOrder.phone); 
-                      }} 
+                      onPress={handleCallClick}
                     > 
                       <Ionicons name="call" size={20} color={(currentUser && isProfileComplete()) ? "#FFF" : "#555"} /> 
                       <Text style={[styles.callBtnText, (!currentUser || !isProfileComplete()) ? {color: '#555'} : {color: '#FFF'}]}>
