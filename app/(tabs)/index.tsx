@@ -4,6 +4,7 @@ import {
   ImageBackground,
   KeyboardAvoidingView,
   LayoutAnimation,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -88,24 +89,30 @@ interface Poptavka {
 } 
 
 export default function App() { 
+  // Навігація та режими
   const [view, setView] = useState<'FORM' | 'AUTH' | 'PROFILE' | 'DASHBOARD'>('FORM'); 
   const [viewMode, setViewMode] = useState<'LIST' | 'MAP'>('LIST'); 
   const [authMode, setAuthMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN'); 
   
+  // Користувач
   const [currentUser, setCurrentUser] = useState<User | null>(null); 
   const [userData, setUserData] = useState<any>(null); 
   const [loading, setLoading] = useState(false); 
   const [isMenuOpen, setIsMenuOpen] = useState(false); 
   const [isFormExpanded, setIsFormExpanded] = useState(true); 
   
+  // Замовлення
   const [orders, setOrders] = useState<Poptavka[]>([]); 
   const [selectedOrder, setSelectedOrder] = useState<Poptavka | null>(null); 
   
+  // Авторизація
   const [emailAuth, setEmailAuth] = useState(''); 
   const [passwordAuth, setPasswordAuth] = useState(''); 
   const [registerRole, setRegisterRole] = useState<'MASTER' | 'CLIENT'>('MASTER'); 
   const [regIco, setRegIco] = useState(''); 
+  const [agreedToTerms, setAgreedToTerms] = useState(false); // ГАЛОЧКА УМОВ
   
+  // Профіль майстра
   const [profileIco, setProfileIco] = useState(''); 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -117,6 +124,7 @@ export default function App() {
   const [wantsPush, setWantsPush] = useState<boolean>(false);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
+  // Форма створення замовлення
   const [selectedCats, setSelectedCats] = useState<string[]>([]); 
   const [title, setTitle] = useState(''); 
   const [desc, setDesc] = useState(''); 
@@ -191,7 +199,12 @@ export default function App() {
 
   const handleAuth = async () => { 
     if (!emailAuth || !passwordAuth) return Alert.alert("Chyba", "Vyplňte všechna pole."); 
-    if (authMode === 'REGISTER' && registerRole === 'MASTER' && !regIco) return Alert.alert("Pozor", "IČO je povinné."); 
+    
+    // ЮРИДИЧНА ПЕРЕВІРКА ПРИ РЕЄСТРАЦІЇ
+    if (authMode === 'REGISTER') {
+      if (registerRole === 'MASTER' && !regIco) return Alert.alert("Pozor", "IČO je povinné."); 
+      if (!agreedToTerms) return Alert.alert("Upozornění", "Pro registraci musíte souhlasit s obchodními podmínkami platformy."); 
+    }
     
     setLoading(true); 
     try { 
@@ -216,8 +229,9 @@ export default function App() {
         setView('FORM'); 
       } 
       setIsMenuOpen(false); 
+      setAgreedToTerms(false); // Скидаємо галочку
     } catch (e) { 
-      Alert.alert("Chyba", "Nepodařilo se přihlásit."); 
+      Alert.alert("Chyba", "Nepodařilo se přihlásit. Zkontrolujte údaje."); 
     } finally { 
       setLoading(false); 
     } 
@@ -377,7 +391,15 @@ export default function App() {
       setView('PROFILE'); setSelectedOrder(null); 
       return; 
     } 
-    Alert.alert("Kontakt", "Telefon: " + selectedOrder?.phone); 
+    
+    if (selectedOrder?.phone) {
+      const phoneNumber = selectedOrder.phone;
+      if (Platform.OS === 'web') {
+        window.open(`tel:${phoneNumber}`);
+      } else {
+        Linking.openURL(`tel:${phoneNumber}`);
+      }
+    }
   };
 
   const handleApproveWorker = async (orderId: string, workerId: string) => {
@@ -404,17 +426,33 @@ export default function App() {
     return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`;
   };
 
+  // ОНОВЛЕНИЙ ФУТЕР З ПРАВАМИ ТА УМОВАМИ
   const Footer = () => ( 
     <View style={styles.footerContainer}> 
       <View style={styles.footerDivider} /> 
       <Text style={styles.footerText}> 
-        © 2026 <Text style={{color: '#FFD700'}}>BytNaKlič</Text>. Premium Servis v ČR. 
+        © {new Date().getFullYear()} <Text style={{color: '#FFD700'}}>BytNaKlíč</Text>. Premium Servis v ČR. 
       </Text> 
       <Text style={styles.footerText}>Všechna práva vyhrazena.</Text> 
+      
+      <TouchableOpacity 
+        style={{marginTop: 10}} 
+        onPress={() => {
+          const msg = "BytNaKlíč je inzertní platforma. Slouží výhradně k propojení poptávajících s mistry. Provozovatel platformy nenese žádnou právní ani finanční odpovědnost za kvalitu odvedené práce, dodržení termínů ani za finanční transakce mezi uživateli.";
+          if (Platform.OS === 'web') {
+            window.alert(msg);
+          } else {
+            Alert.alert("Vyloučení odpovědnosti", msg);
+          }
+        }}
+      >
+        <Text style={{color: '#666', fontSize: 11, textDecorationLine: 'underline', textAlign: 'center'}}>
+          Obchodní podmínky a vyloučení odpovědnosti
+        </Text>
+      </TouchableOpacity>
     </View> 
   ); 
 
-  // ФІЛЬТРАЦІЯ
   const approvedOrders = orders.filter(o => o.status === 'APPROVED' || currentUser?.email === ADMIN_EMAIL);
   const visibleOrders = activeFilter ? approvedOrders.filter(o => o.categories.includes(activeFilter)) : approvedOrders;
 
@@ -437,8 +475,12 @@ export default function App() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{flex: 1}}> 
           <StatusBar barStyle="light-content" /> 
           
+          {/* HEADER З КЛІКАБЕЛЬНИМ ЛОГОТИПОМ */}
           <View style={styles.header}> 
-            <Text style={styles.logo}>BYT<Text style={{color: '#FFD700'}}>NAKLÍČ</Text></Text> 
+            <TouchableOpacity onPress={() => { setView('FORM'); setSelectedOrder(null); setIsMenuOpen(false); }}>
+              <Text style={styles.logo}>BYT<Text style={{color: '#FFD700'}}>NAKLÍČ</Text></Text> 
+            </TouchableOpacity>
+
             <TouchableOpacity style={styles.profileBtn} onPress={() => setIsMenuOpen(true)}> 
               <Ionicons name="person-outline" size={20} color="#FFD700" /> 
               {currentUser && !isProfileComplete() && <View style={styles.badge} />} 
@@ -558,7 +600,6 @@ export default function App() {
                     </View>
                   </View>
 
-                  {/* СТРІЧКА ФІЛЬТРІВ */}
                   <View style={styles.filterWrapper}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
                       <TouchableOpacity style={[styles.filterChip, !activeFilter && styles.filterChipActive]} onPress={() => setActiveFilter(null)}>
@@ -628,7 +669,7 @@ export default function App() {
               </> 
             )} 
 
-            {/* VIEW: DASHBOARD (MOJE AKTIVITY - ОПТИМІЗОВАНО) */}
+            {/* VIEW: DASHBOARD (MOJE AKTIVITY) */}
             {view === 'DASHBOARD' && (
               <View style={{width: '92%', paddingTop: 20}}>
                 
@@ -715,7 +756,7 @@ export default function App() {
               </View>
             )}
 
-            {/* VIEW: AUTH */}
+            {/* VIEW: AUTH З ЮРИДИЧНОЮ ГАЛОЧКОЮ */}
             {view === 'AUTH' && ( 
               <ScrollView contentContainerStyle={{flexGrow: 1, width: '100%', alignItems: 'center', paddingTop: 40}}> 
                 <View style={styles.card}> 
@@ -738,6 +779,16 @@ export default function App() {
                   {authMode === 'REGISTER' && registerRole === 'MASTER' && (
                     <TextInput style={styles.input} placeholder="IČO / SRO" placeholderTextColor="#666" value={regIco} onChangeText={setRegIco} />
                   )} 
+
+                  {/* ГАЛОЧКА "УМОВИ ПЛАТФОРМИ" */}
+                  {authMode === 'REGISTER' && (
+                    <TouchableOpacity style={[styles.checkboxContainer, {marginTop: 5, marginBottom: 20}]} onPress={() => setAgreedToTerms(!agreedToTerms)}>
+                      <Ionicons name={agreedToTerms ? "checkbox" : "square-outline"} size={22} color={agreedToTerms ? "#FFD700" : "#888"} />
+                      <Text style={[styles.checkboxLabel, {fontSize: 11, flex: 1, color: '#888', lineHeight: 16}]}>
+                        Souhlasím s obchodními podmínkami. Beru na vědomí, že platforma <Text style={{color: '#CCC'}}>nenese odpovědnost</Text> za kvalitu prací ani platební transakce.
+                      </Text>
+                    </TouchableOpacity>
+                  )}
 
                   <TouchableOpacity style={styles.goldBtn} onPress={handleAuth}>
                     <Text style={styles.goldBtnText}>POKRAČOVAT</Text>
