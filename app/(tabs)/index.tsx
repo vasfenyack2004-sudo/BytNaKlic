@@ -110,7 +110,7 @@ export default function App() {
   const [registerRole, setRegisterRole] = useState<'MASTER' | 'CLIENT'>('MASTER'); 
   const [regIco, setRegIco] = useState(''); 
   
-  // Профіль майстра
+  // Профіль
   const [profileIco, setProfileIco] = useState(''); 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -318,8 +318,6 @@ export default function App() {
   }; 
 
   // --- ЛОГІКА ДЛЯ СУПЕР-СИСТЕМИ ---
-  
-  // Майстер подає заявку на роботу
   const handleApplyForJob = async (orderId: string) => {
     if (!currentUser) return setView('AUTH');
     if (!isProfileComplete()) return Alert.alert("Profil", "Nejdříve vyplňte svůj profil (včetně specializace).");
@@ -347,7 +345,6 @@ export default function App() {
     );
   };
 
-  // Клієнт підтверджує майстра
   const handleApproveWorker = async (orderId: string, workerId: string) => {
     await updateDoc(doc(db, "poptavky", orderId), { 
       status: 'IN_PROGRESS', 
@@ -357,7 +354,6 @@ export default function App() {
     setSelectedOrder(null);
   };
 
-  // Майстер завершує роботу
   const handleCompleteWork = async (orderId: string) => {
     await updateDoc(doc(db, "poptavky", orderId), { 
       status: 'COMPLETED' 
@@ -365,7 +361,6 @@ export default function App() {
     Alert.alert("Skvělá práce!", "Zakázka byla označena jako dokončená.");
     setSelectedOrder(null);
   };
-
   // ---------------------------------
 
   const formatDate = (dateObj: any) => {
@@ -384,15 +379,24 @@ export default function App() {
     </View> 
   ); 
 
-  // Фільтрація для головного списку
+  // ФІЛЬТРАЦІЯ
   const approvedOrders = orders.filter(o => o.status === 'APPROVED' || currentUser?.email === ADMIN_EMAIL);
-  const visibleOrders = activeFilter 
-    ? approvedOrders.filter(o => o.categories.includes(activeFilter))
-    : approvedOrders;
+  const visibleOrders = activeFilter ? approvedOrders.filter(o => o.categories.includes(activeFilter)) : approvedOrders;
 
-  // Фільтрація для "Moje aktivity"
   const myZakazky = orders.filter(o => o.ownerId === currentUser?.uid);
   const myPrace = orders.filter(o => o.workerId === currentUser?.uid || o.applicants?.some(a => a.uid === currentUser?.uid));
+
+  // --- ВИПРАВЛЕНІ ХЕЛПЕРИ ДЛЯ UI СТАТУСІВ ---
+  // ВАЖЛИВО: Кольори повинні мати 6 символів (напр. #888888), щоб прозорість +20 працювала без помилок
+  const getStatusBadge = (status: string) => {
+    switch(status) {
+      case 'PENDING': return { text: '⏳ ČEKÁ NA SCHVÁLENÍ', color: '#888888' };
+      case 'APPROVED': return { text: '✅ HLEDÁ MISTRA', color: '#FFD700' };
+      case 'IN_PROGRESS': return { text: '🛠 PROBÍHÁ', color: '#00BFFF' };
+      case 'COMPLETED': return { text: '🎉 HOTOVO', color: '#32CD32' };
+      default: return { text: status, color: '#FFFFFF' };
+    }
+  };
 
   return ( 
     <ImageBackground source={{ uri: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=2000&auto=format&fit=crop' }} style={styles.backgroundImage} imageStyle={{ opacity: 1 }}> 
@@ -400,7 +404,6 @@ export default function App() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{flex: 1}}> 
           <StatusBar barStyle="light-content" /> 
           
-          {/* HEADER */}
           <View style={styles.header}> 
             <Text style={styles.logo}>BYT<Text style={{color: '#FFD700'}}>NAKLÍČ</Text></Text> 
             <TouchableOpacity style={styles.profileBtn} onPress={() => setIsMenuOpen(true)}> 
@@ -409,7 +412,6 @@ export default function App() {
             </TouchableOpacity> 
           </View> 
 
-          {/* FLOATING MENU */}
           {isMenuOpen && <TouchableOpacity style={styles.menuCloseOverlay} activeOpacity={1} onPress={() => setIsMenuOpen(false)} />} 
           
           {isMenuOpen && ( 
@@ -545,7 +547,6 @@ export default function App() {
                             <Text style={styles.orderCats}>{item.categories[0]}</Text> 
                             <View style={{flexDirection: 'row', gap: 10, alignItems: 'center'}}> 
                               <Text style={styles.orderDate}>{formatDate(item.createdAt)}</Text>
-                              {item.status === 'PENDING' && <Text style={{color: '#FFA500', fontSize: 10, fontWeight: 'bold'}}>⏳ ČEKÁ</Text>} 
                               <View style={styles.viewsBadge}>
                                 <Ionicons name="eye-outline" size={14} color="#00BFFF" />
                                 <Text style={styles.viewsText}>{item.views || 0}</Text>
@@ -555,14 +556,14 @@ export default function App() {
                           <Text style={styles.orderTitle}>{item.title}</Text>
                           <Text style={styles.orderPrice}>{item.price} Kč</Text> 
                           {item.address && (
-                            <Text style={{color: '#888', fontSize: 11, marginTop: 5}}>
-                              <Ionicons name="location-outline" size={12} color="#888" /> {item.address}
+                            <Text style={{color: '#888888', fontSize: 11, marginTop: 5}}>
+                              <Ionicons name="location-outline" size={12} color="#888888" /> {item.address}
                             </Text>
                           )}
                         </TouchableOpacity> 
                       ))
                     ) : (
-                      <Text style={{color: '#888', textAlign: 'center', marginTop: 20}}>Žádné zakázky pro tuto kategorii.</Text>
+                      <Text style={{color: '#888888', textAlign: 'center', marginTop: 20}}>Žádné zakázky pro tuto kategorii.</Text>
                     )
                   ) : (
                     <View style={styles.mapContainer}>
@@ -594,53 +595,87 @@ export default function App() {
               </> 
             )} 
 
-            {/* VIEW: DASHBOARD (MOJE AKTIVITY) */}
+            {/* VIEW: DASHBOARD (MOJE AKTIVITY - ОПТИМІЗОВАНО) */}
             {view === 'DASHBOARD' && (
               <View style={{width: '92%', paddingTop: 20}}>
                 
-                <Text style={styles.sectionTitle}>Moje zakázky (Zákazník)</Text>
-                {myZakazky.length === 0 ? (
-                  <Text style={{color: '#888', textAlign: 'center', marginTop: 10}}>Zatím nemáte žádné vlastní zakázky.</Text>
-                ) : (
-                  myZakazky.map(item => (
-                    <TouchableOpacity key={item.id} style={[styles.orderCard, {borderColor: '#00BFFF'}]} onPress={()=>setSelectedOrder(item)}>
-                      <View style={styles.orderHeader}>
-                        <Text style={{color: '#00BFFF', fontSize: 10, fontWeight: 'bold'}}>MOJE ZAKÁZKA</Text>
-                        <Text style={{color: '#FFD700', fontSize: 10, fontWeight: 'bold'}}>{item.status}</Text>
+                {/* БЛОК КЛІЄНТА */}
+                {(!userData || userData.role === 'CLIENT' || currentUser?.email === ADMIN_EMAIL) && (
+                  <View style={{marginBottom: 30}}>
+                    <Text style={styles.dashboardMainTitle}>Moje poptávky</Text>
+                    
+                    {myZakazky.length === 0 ? (
+                      <View style={styles.emptyStateContainer}>
+                        <Ionicons name="document-text-outline" size={40} color="#444" />
+                        <Text style={styles.emptyStateText}>Zatím jste nevytvořili žádnou zakázku.</Text>
+                        <TouchableOpacity style={[styles.goldBtn, {marginTop: 15, paddingVertical: 12}]} onPress={() => setView('FORM')}>
+                          <Text style={styles.goldBtnText}>Vytvořit poptávku</Text>
+                        </TouchableOpacity>
                       </View>
-                      <Text style={styles.orderTitle}>{item.title}</Text>
-                      
-                      {item.status === 'APPROVED' && item.applicants && item.applicants.length > 0 && (
-                        <View style={{marginTop: 10, backgroundColor: '#222', padding: 10, borderRadius: 10}}>
-                          <Text style={{color: '#FFD700', fontSize: 12}}>
-                            ⚠️ Máte {item.applicants.length} zájemců! Klikněte pro výběr.
-                          </Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  ))
+                    ) : (
+                      myZakazky.map(item => {
+                        const badge = getStatusBadge(item.status);
+                        const hasApplicants = item.status === 'APPROVED' && item.applicants && item.applicants.length > 0;
+                        return (
+                          <TouchableOpacity key={item.id} style={[styles.orderCard, hasApplicants ? {borderColor: '#FFD700', borderWidth: 2} : {}]} onPress={()=>setSelectedOrder(item)}>
+                            <View style={styles.orderHeader}>
+                              <Text style={styles.orderDate}>{formatDate(item.createdAt)}</Text>
+                              <View style={[styles.statusBadge, {backgroundColor: badge.color + '20', borderColor: badge.color}]}>
+                                <Text style={{color: badge.color, fontSize: 10, fontWeight: 'bold'}}>{badge.text}</Text>
+                              </View>
+                            </View>
+                            <Text style={styles.orderTitle}>{item.title}</Text>
+                            
+                            {hasApplicants && (
+                              <View style={styles.urgentActionBox}>
+                                <Ionicons name="notifications" size={16} color="#000" />
+                                <Text style={{color: '#000', fontSize: 12, fontWeight: 'bold'}}>
+                                  Máte {item.applicants?.length} zájemců! Klikněte pro výběr.
+                                </Text>
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })
+                    )}
+                  </View>
                 )}
 
-                <Text style={[styles.sectionTitle, {marginTop: 30}]}>Moje práce (Mistr)</Text>
-                {myPrace.length === 0 ? (
-                  <Text style={{color: '#888', textAlign: 'center', marginTop: 10}}>Zatím nepracujete na žádné zakázce.</Text>
-                ) : (
-                  myPrace.map(item => (
-                    <TouchableOpacity key={item.id} style={[styles.orderCard, {borderColor: '#FFD700'}]} onPress={()=>setSelectedOrder(item)}>
-                      <View style={styles.orderHeader}>
-                        <Text style={{color: '#FFD700', fontSize: 10, fontWeight: 'bold'}}>ZÁJEM O PRÁCI</Text>
-                        <Text style={{color: item.status === 'IN_PROGRESS' ? '#32CD32' : '#FFA500', fontSize: 10, fontWeight: 'bold'}}>
-                          {item.status}
-                        </Text>
+                {/* БЛОК МАЙСТРА */}
+                {(!userData || userData.role === 'MASTER' || currentUser?.email === ADMIN_EMAIL) && (
+                  <View>
+                    <Text style={styles.dashboardMainTitle}>Moje projekty</Text>
+                    
+                    {myPrace.length === 0 ? (
+                      <View style={styles.emptyStateContainer}>
+                        <Ionicons name="hammer-outline" size={40} color="#444" />
+                        <Text style={styles.emptyStateText}>Zatím nemáte žádné aktivní projekty.</Text>
+                        <TouchableOpacity style={[styles.callBtn, {backgroundColor: '#222', marginTop: 15}]} onPress={() => setView('FORM')}>
+                          <Text style={{color: '#FFFFFF'}}>Prohlédnout nabídky</Text>
+                        </TouchableOpacity>
                       </View>
-                      <Text style={styles.orderTitle}>{item.title}</Text>
-                      <Text style={{color: '#888', fontSize: 12, marginTop: 5}}>
-                        {item.workerId === currentUser?.uid 
-                          ? '✅ Jste vybrán! Můžete začít pracovat.' 
-                          : '⏳ Čekáte na schválení zákazníkem.'}
-                      </Text>
-                    </TouchableOpacity>
-                  ))
+                    ) : (
+                      myPrace.map(item => {
+                        const isWorkingOnIt = item.workerId === currentUser?.uid;
+                        const badgeColor = isWorkingOnIt ? '#00BFFF' : '#888888';
+                        
+                        return (
+                          <TouchableOpacity key={item.id} style={[styles.orderCard, isWorkingOnIt ? {borderColor: '#00BFFF'} : {}]} onPress={()=>setSelectedOrder(item)}>
+                            <View style={styles.orderHeader}>
+                              <Text style={styles.orderDate}>{formatDate(item.createdAt)}</Text>
+                              <View style={[styles.statusBadge, {backgroundColor: badgeColor + '20', borderColor: badgeColor}]}>
+                                <Text style={{color: badgeColor, fontSize: 10, fontWeight: 'bold'}}>
+                                  {isWorkingOnIt ? '🛠 PRACUJI NA TOM' : '⏳ ČEKÁM NA POTVRZENÍ'}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={styles.orderTitle}>{item.title}</Text>
+                            {item.address && <Text style={{color: '#888888', fontSize: 11, marginTop: 5}}>📍 {item.address}</Text>}
+                          </TouchableOpacity>
+                        );
+                      })
+                    )}
+                  </View>
                 )}
 
                 <Footer />
@@ -656,10 +691,10 @@ export default function App() {
                   {authMode === 'REGISTER' && ( 
                     <View style={{flexDirection: 'row', gap: 10, marginVertical: 15}}> 
                       <TouchableOpacity style={[styles.chip, registerRole === 'MASTER' && styles.chipActive, {flex:1, alignItems:'center'}]} onPress={() => setRegisterRole('MASTER')}>
-                        <Text style={{color: registerRole === 'MASTER' ? '#000' : '#888'}}>Mistr</Text>
+                        <Text style={{color: registerRole === 'MASTER' ? '#000' : '#888888'}}>Mistr</Text>
                       </TouchableOpacity> 
                       <TouchableOpacity style={[styles.chip, registerRole === 'CLIENT' && styles.chipActive, {flex:1, alignItems:'center'}]} onPress={() => setRegisterRole('CLIENT')}>
-                        <Text style={{color: registerRole === 'CLIENT' ? '#000' : '#888'}}>Zákazník</Text>
+                        <Text style={{color: registerRole === 'CLIENT' ? '#000' : '#888888'}}>Zákazník</Text>
                       </TouchableOpacity> 
                     </View> 
                   )} 
@@ -697,7 +732,7 @@ export default function App() {
                   </View>
 
                   <Text style={styles.label}>Email:</Text>
-                  <TextInput style={[styles.input, {color: '#888'}]} value={currentUser?.email || ''} editable={false} /> 
+                  <TextInput style={[styles.input, {color: '#888888'}]} value={currentUser?.email || ''} editable={false} /> 
 
                   <Text style={styles.label}>Jméno:</Text>
                   <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} placeholder="Jan" placeholderTextColor="#666" />
@@ -775,7 +810,9 @@ export default function App() {
                       </View> 
                       <View style={styles.infoBox}>
                         <Text style={styles.infoLabel}>STAV</Text>
-                        <Text style={[styles.infoValue, {fontSize: 14, color: '#00BFFF'}]}>{selectedOrder.status}</Text>
+                        <Text style={[styles.infoValue, {fontSize: 14, color: getStatusBadge(selectedOrder.status).color}]}>
+                          {getStatusBadge(selectedOrder.status).text}
+                        </Text>
                       </View> 
                     </View> 
                     
@@ -810,7 +847,7 @@ export default function App() {
                     {selectedOrder.ownerId === currentUser?.uid && selectedOrder.status === 'APPROVED' && selectedOrder.applicants && selectedOrder.applicants.length > 0 && (
                       <View style={{marginTop: 20, marginBottom: 20}}>
                         <Text style={{color: '#FFD700', marginBottom: 10, fontWeight: 'bold'}}>Zájemci o tuto práci:</Text>
-                        {selectedOrder.applicants.map((applicant: any) => (
+                        {selectedOrder.applicants?.map((applicant: any) => (
                           <TouchableOpacity 
                             key={applicant.uid} 
                             style={styles.applicantCard} 
@@ -818,7 +855,7 @@ export default function App() {
                           >
                             <View>
                               <Text style={{color: '#FFF', fontWeight: 'bold'}}>{applicant.name}</Text>
-                              <Text style={{color: '#FFD700', fontSize: 12}}>⭐️ {Number(applicant.rating).toFixed(1)}</Text>
+                              <Text style={{color: '#FFD700', fontSize: 12}}>⭐️ {Number(applicant.rating || 5).toFixed(1)}</Text>
                             </View>
                             <Text style={{color: '#00BFFF', fontWeight: 'bold'}}>Vybrat mistra</Text>
                           </TouchableOpacity>
@@ -916,13 +953,13 @@ const styles = StyleSheet.create({
   chip: { padding: 10, borderRadius: 8, backgroundColor: '#222', borderWidth: 1, borderColor: '#444' }, 
   chipActive: { backgroundColor: '#FFD700' }, 
   chipText: { color: '#CCC', fontSize: 11, fontWeight: 'bold' }, 
-  label: { color: '#888', marginBottom: 5, marginTop: 10, fontSize: 12 }, 
+  label: { color: '#888888', marginBottom: 5, marginTop: 10, fontSize: 12 }, 
   input: { backgroundColor: '#111', color: '#FFF', borderRadius: 12, padding: 15, marginBottom: 12, borderWidth: 1, borderColor: '#333' }, 
   goldBtn: { backgroundColor: '#FFD700', padding: 18, borderRadius: 15, alignItems: 'center' }, 
   goldBtnText: { color: '#000', fontWeight: 'bold' }, 
   statsContainer: { flexDirection: 'row', width: '92%', backgroundColor: 'rgba(15,15,20,0.9)', borderRadius: 20, padding: 15, marginTop: 20, borderWidth:1, borderColor:'#333' }, 
   statBox: { flex: 1, alignItems: 'center' }, 
-  statLabel: { color: '#888', fontSize: 11 }, 
+  statLabel: { color: '#888888', fontSize: 11 }, 
   statValue: { color: '#00BFFF', fontSize: 20, fontWeight: 'bold' }, 
   listSection: { width: '92%', marginTop: 25 }, 
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
@@ -930,11 +967,11 @@ const styles = StyleSheet.create({
   toggleContainer: { flexDirection: 'row', backgroundColor: '#222', borderRadius: 10, padding: 4, borderWidth: 1, borderColor: '#333' },
   toggleBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, gap: 5 },
   toggleBtnActive: { backgroundColor: '#FFD700' },
-  toggleText: { color: '#888', fontSize: 12, fontWeight: 'bold' },
+  toggleText: { color: '#888888', fontSize: 12, fontWeight: 'bold' },
   filterWrapper: { marginBottom: 15, height: 35 },
   filterChip: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 12, backgroundColor: '#222', borderWidth: 1, borderColor: '#444', justifyContent: 'center' },
   filterChipActive: { backgroundColor: '#FFD700', borderColor: '#FFD700' },
-  filterChipText: { color: '#888', fontSize: 11, fontWeight: 'bold' },
+  filterChipText: { color: '#888888', fontSize: 11, fontWeight: 'bold' },
   checkboxContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 15, marginBottom: 20, width: '100%', gap: 10, paddingHorizontal: 5 },
   checkboxLabel: { color: '#CCC', fontSize: 13 },
   ratingBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#222', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, gap: 5, borderWidth: 1, borderColor: '#444' },
@@ -942,9 +979,9 @@ const styles = StyleSheet.create({
   mapContainer: { height: 400, borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: '#333', marginBottom: 20 },
   map: { width: '100%', height: '100%' },
   orderCard: { backgroundColor: 'rgba(15, 15, 20, 0.9)', borderRadius: 18, padding: 18, marginBottom: 15, borderWidth: 1, borderColor: '#333' }, 
-  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }, 
+  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, alignItems: 'center' }, 
   orderCats: { color: '#FFD700', fontSize: 10, fontWeight: 'bold' }, 
-  orderDate: { color: '#666', fontSize: 11, fontWeight: '500' }, 
+  orderDate: { color: '#888888', fontSize: 11, fontWeight: '500' }, 
   viewsBadge: { flexDirection: 'row', alignItems: 'center', gap: 5 }, 
   viewsText: { color: '#00BFFF', fontSize: 12 }, 
   orderTitle: { color: '#FFF', fontSize: 16, fontWeight: 'bold' }, 
@@ -957,12 +994,19 @@ const styles = StyleSheet.create({
   modalTitle: { color: '#FFF', fontSize: 24, fontWeight: 'bold', marginVertical: 10 }, 
   modalInfoRow: { flexDirection: 'row', gap: 15, marginVertical: 20 }, 
   infoBox: { flex: 1, backgroundColor: '#1A1A24', padding: 15, borderRadius: 15, borderWidth: 1, borderColor: '#333' }, 
-  infoLabel: { color: '#888', fontSize: 10, fontWeight: 'bold', marginBottom: 5 }, 
+  infoLabel: { color: '#888888', fontSize: 10, fontWeight: 'bold', marginBottom: 5 }, 
   infoValue: { color: '#FFF', fontSize: 18, fontWeight: 'bold' }, 
   modalDesc: { color: '#CCC', fontSize: 16, lineHeight: 24, marginBottom: 20 }, 
   callBtn: { backgroundColor: '#FFD700', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 18, borderRadius: 15, gap: 10 }, 
   callBtnText: { color: '#000', fontWeight: 'bold', fontSize: 16 }, 
   footerContainer: { marginTop: 40, paddingBottom: 20, paddingHorizontal: 20, alignItems: 'center' }, 
   footerDivider: { width: '40%', height: 1, backgroundColor: '#FFD700', marginBottom: 20 }, 
-  footerText: { color: '#888', fontSize: 12, textAlign: 'center', lineHeight: 18 } 
+  footerText: { color: '#888888', fontSize: 12, textAlign: 'center', lineHeight: 18 },
+  
+  // СТИЛІ DASHBOARD
+  dashboardMainTitle: { color: '#FFF', fontSize: 22, fontWeight: 'bold', marginBottom: 15 },
+  emptyStateContainer: { alignItems: 'center', backgroundColor: '#111', padding: 30, borderRadius: 20, borderWidth: 1, borderColor: '#333' },
+  emptyStateText: { color: '#888888', textAlign: 'center', marginTop: 15, fontSize: 14 },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
+  urgentActionBox: { marginTop: 15, backgroundColor: '#FFD700', padding: 12, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }
 });
