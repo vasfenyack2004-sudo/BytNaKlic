@@ -52,6 +52,7 @@ const ADMIN_EMAIL = 'vas.fenyack2004@gmail.com';
 interface Poptavka { 
 id: string; title: string; description: string; 
 price: string; phone: string; email?: string; 
+address?: string; // Додано в інтерфейс
 categories: string[]; createdAt: any; views: number; 
 status?: 'PENDING' | 'APPROVED'; 
 } 
@@ -79,6 +80,7 @@ const [desc, setDesc] = useState('');
 const [price, setPrice] = useState(''); 
 const [phone, setPhone] = useState(''); 
 const [emailOrder, setEmailOrder] = useState(''); 
+const [address, setAddress] = useState(''); // Стан для адреси
 
 const CATEGORIES = ['ZEDNÍK', 'MALÍŘ', 'STAVEBNÍK', 'ELEKTRIKÁŘ', 'INSTALATÉR', 'PODLAHÁŘ', 'ÚKLID', 'ZAHRADA', 'STĚHOVÁNÍ']; 
 
@@ -154,13 +156,19 @@ finally { setLoading(false); }
 }; 
 
 const handleSubmitOrder = async () => { 
-if (!title || !phone || selectedCats.length === 0) return Alert.alert("Pozor", "Doplňte název, телефон a kategorii."); 
+// Перевірка на адресу
+if (!title || !phone || !address || selectedCats.length === 0) return Alert.alert("Pozor", "Doplňte název, adresu, telefon a kategorii."); 
 setLoading(true); 
 const initialStatus = currentUser?.email === ADMIN_EMAIL ? 'APPROVED' : 'PENDING'; 
 try { 
 await addDoc(collection(db, "poptavky"), { 
-title, description: desc, price, phone, email: emailOrder || "neuvedeno", 
-categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus 
+title, description: desc, price, phone, 
+address, // Додано адресу
+email: emailOrder || "neuvedeno", 
+categories: selectedCats, createdAt: new Date(), views: 0, status: initialStatus,
+// Симуляція координат для майбутньої карти
+lat: 50.0755 + (Math.random() - 0.5) * 0.1,
+lng: 14.4378 + (Math.random() - 0.5) * 0.1
 }); 
 
 if (initialStatus === 'PENDING') { 
@@ -181,7 +189,7 @@ console.error('MAIL FAIL', mailErr);
 } 
 } 
 
-setTitle(''); setDesc(''); setPrice(''); setPhone(''); setEmailOrder(''); setSelectedCats([]); 
+setTitle(''); setDesc(''); setPrice(''); setPhone(''); setEmailOrder(''); setAddress(''); setSelectedCats([]); 
 setIsFormExpanded(false); 
 Alert.alert("Hotovo", initialStatus === 'APPROVED' ? "Zakázka byla publikována." : "Odesláno ke schválení. Email adminovi byl odeslán."); 
 
@@ -262,6 +270,10 @@ imageStyle={{ opacity: 1 }}
 {isFormExpanded && ( 
 <View style={styles.formBody}> 
 <TextInput style={styles.input} placeholder="Název zakázky" placeholderTextColor="#999" value={title} onChangeText={setTitle} /> 
+
+{/* Додано поле для адреси */}
+<TextInput style={styles.input} placeholder="Adresa (Ulice, Město)" placeholderTextColor="#999" value={address} onChangeText={setAddress} /> 
+
 <TextInput style={[styles.input, {height: 80}]} placeholder="Detailní popis..." multiline placeholderTextColor="#999" value={desc} onChangeText={setDesc} /> 
 <TextInput style={styles.input} placeholder="Rozpočet (Kč)" keyboardType="numeric" placeholderTextColor="#999" value={price} onChangeText={setPrice} /> 
 <TextInput style={styles.input} placeholder="Telefon" keyboardType="phone-pad" placeholderTextColor="#999" value={phone} onChangeText={setPhone} /> 
@@ -285,13 +297,14 @@ imageStyle={{ opacity: 1 }}
 <View style={styles.orderHeader}> 
 <Text style={styles.orderCats}>{item.categories[0]}</Text> 
 <View style={{flexDirection: 'row', gap: 10, alignItems: 'center'}}> 
-{/* ОСЬ ТУТ ДОДАНО ВІДОБРАЖЕННЯ ДАТИ */}
 <Text style={styles.orderDate}>{formatDate(item.createdAt)}</Text>
 {item.status === 'PENDING' && <Text style={{color: '#FFA500', fontSize: 10, fontWeight: 'bold'}}>⏳ ČEKÁ</Text>} 
 <View style={styles.viewsBadge}><Ionicons name="eye-outline" size={14} color="#00BFFF" /><Text style={styles.viewsText}>{item.views || 0}</Text></View> 
 </View> 
 </View> 
 <Text style={styles.orderTitle}>{item.title}</Text><Text style={styles.orderPrice}>{item.price} Kč</Text> 
+{/* Відображення адреси в списку (за бажанням можна прибрати) */}
+{item.address && <Text style={{color: '#888', fontSize: 11, marginTop: 5}}><Ionicons name="location-outline" size={12} color="#888" /> {item.address}</Text>}
 </TouchableOpacity> 
 ))} 
 </View> 
@@ -346,6 +359,7 @@ imageStyle={{ opacity: 1 }}
 <View style={styles.infoBox}><Text style={styles.infoLabel}>ZOBRAZENÍ</Text><Text style={styles.infoValue}>{selectedOrder.views}</Text></View> 
 </View> 
 <Text style={styles.infoLabel}>POPIS:</Text><Text style={styles.modalDesc}>{selectedOrder.description}</Text> 
+{selectedOrder.address && <><Text style={styles.infoLabel}>LOKALITA:</Text><Text style={styles.modalDesc}>{selectedOrder.address}</Text></>}
 <Text style={styles.infoLabel}>KONTAKTNÍ EMAIL:</Text><Text style={styles.modalDesc}>{maskContact(selectedOrder.email || "neuvedeno", 'email')}</Text> 
 
 <TouchableOpacity 
@@ -436,7 +450,7 @@ sectionTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold', marginBottom: 1
 orderCard: { backgroundColor: 'rgba(15, 15, 20, 0.9)', borderRadius: 18, padding: 18, marginBottom: 15, borderWidth: 1, borderColor: '#333' }, 
 orderHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }, 
 orderCats: { color: '#FFD700', fontSize: 10, fontWeight: 'bold' }, 
-orderDate: { color: '#666', fontSize: 11, fontWeight: '500' }, // СТИЛЬ ДЛЯ ДАТИ
+orderDate: { color: '#666', fontSize: 11, fontWeight: '500' }, 
 viewsBadge: { flexDirection: 'row', alignItems: 'center', gap: 5 }, 
 viewsText: { color: '#00BFFF', fontSize: 12 }, 
 orderTitle: { color: '#FFF', fontSize: 16, fontWeight: 'bold' }, 
