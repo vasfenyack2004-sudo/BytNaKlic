@@ -192,6 +192,13 @@ setLoading(false);
 } 
 }; 
 
+// Допоміжна функція для форматування дати публікації
+const formatDate = (dateObj: any) => {
+  if (!dateObj || !dateObj.seconds) return 'Dnes';
+  const d = new Date(dateObj.seconds * 1000);
+  return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`;
+};
+
 const Footer = () => ( 
 <View style={styles.footerContainer}> 
 <View style={styles.footerDivider} /> 
@@ -206,7 +213,6 @@ const visibleOrders = orders.filter(o => o.status === 'APPROVED' || currentUser?
 
 return ( 
 <ImageBackground 
-// ПЕРЕВІРЕНЕ ПОСИЛАННЯ НА ЦЕГЛУ (воно точно працює і не видасть 404)
 source={{ uri: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=2000&auto=format&fit=crop' }} 
 style={styles.backgroundImage} 
 imageStyle={{ opacity: 1 }} 
@@ -278,7 +284,9 @@ imageStyle={{ opacity: 1 }}
 <TouchableOpacity key={item.id} style={styles.orderCard} onPress={() => handleOpenOrder(item)}> 
 <View style={styles.orderHeader}> 
 <Text style={styles.orderCats}>{item.categories[0]}</Text> 
-<View style={{flexDirection: 'row', gap: 10}}> 
+<View style={{flexDirection: 'row', gap: 10, alignItems: 'center'}}> 
+{/* ОСЬ ТУТ ДОДАНО ВІДОБРАЖЕННЯ ДАТИ */}
+<Text style={styles.orderDate}>{formatDate(item.createdAt)}</Text>
 {item.status === 'PENDING' && <Text style={{color: '#FFA500', fontSize: 10, fontWeight: 'bold'}}>⏳ ČEKÁ</Text>} 
 <View style={styles.viewsBadge}><Ionicons name="eye-outline" size={14} color="#00BFFF" /><Text style={styles.viewsText}>{item.views || 0}</Text></View> 
 </View> 
@@ -305,7 +313,7 @@ imageStyle={{ opacity: 1 }}
 <TextInput style={styles.input} placeholder="Heslo" secureTextEntry placeholderTextColor="#666" value={passwordAuth} onChangeText={setPasswordAuth} /> 
 {authMode === 'REGISTER' && registerRole === 'MASTER' && <TextInput style={styles.input} placeholder="IČO / SRO" placeholderTextColor="#666" value={regIco} onChangeText={setRegIco} />} 
 <TouchableOpacity style={styles.goldBtn} onPress={handleAuth}><Text style={styles.goldBtnText}>POKRAČOVAT</Text></TouchableOpacity> 
-<TouchableOpacity onPress={() => setAuthMode(authMode === 'LOGIN' ? 'REGISTER' : 'LOGIN')} style={{marginTop: 20}}><Text style={{color: '#FFD700', textAlign: 'center'}}>Změnit на {authMode === 'LOGIN' ? 'Registraci' : 'Přihlášení'}</Text></TouchableOpacity> 
+<TouchableOpacity onPress={() => setAuthMode(authMode === 'LOGIN' ? 'REGISTER' : 'LOGIN')} style={{marginTop: 20}}><Text style={{color: '#FFD700', textAlign: 'center'}}>Změnit na {authMode === 'LOGIN' ? 'Registraci' : 'Přihlášení'}</Text></TouchableOpacity> 
 </View> 
 <Footer /> 
 </ScrollView> 
@@ -330,7 +338,7 @@ imageStyle={{ opacity: 1 }}
 <View style={styles.modalOverlay}><View style={styles.modalContent}> 
 <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedOrder(null)}><Ionicons name="close" size={28} color="#FFD700" /></TouchableOpacity> 
 {selectedOrder && (<ScrollView showsVerticalScrollIndicator={false}> 
-{selectedOrder.status === 'PENDING' && <Text style={{color: '#FFA500', fontWeight: 'bold', marginBottom: 10}}>⚠️ Tato zakázka čeká на schválení</Text>} 
+{selectedOrder.status === 'PENDING' && <Text style={{color: '#FFA500', fontWeight: 'bold', marginBottom: 10}}>⚠️ Tato zakázka čeká na schválení</Text>} 
 <Text style={styles.modalCats}>{selectedOrder.categories.join(' • ')}</Text> 
 <Text style={styles.modalTitle}>{selectedOrder.title}</Text> 
 <View style={styles.modalInfoRow}> 
@@ -340,7 +348,6 @@ imageStyle={{ opacity: 1 }}
 <Text style={styles.infoLabel}>POPIS:</Text><Text style={styles.modalDesc}>{selectedOrder.description}</Text> 
 <Text style={styles.infoLabel}>KONTAKTNÍ EMAIL:</Text><Text style={styles.modalDesc}>{maskContact(selectedOrder.email || "neuvedeno", 'email')}</Text> 
 
-{/* КНОПКА ВИКЛИКУ З ЛОГІКОЮ ДЛЯ ГІСТЯ ВСТАВЛЕНА СЮДИ */} 
 <TouchableOpacity 
 style={[styles.callBtn, (!currentUser || !isProfileComplete()) && {backgroundColor: '#222'}]} 
 onPress={() => { 
@@ -391,7 +398,7 @@ onPress={() => {
 
 const styles = StyleSheet.create({ 
 backgroundImage: { flex: 1, backgroundColor: '#000' }, 
-darkOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.4)' }, // Оптимальне затемнення для читабельності
+darkOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.4)' },
 header: { paddingTop: 60, paddingHorizontal: 25, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 100 }, 
 logo: { fontSize: 22, fontWeight: '900', color: '#FFF' }, 
 profileBtn: { padding: 10, backgroundColor: 'rgba(20, 20, 20, 0.9)', borderRadius: 12, borderWidth: 1, borderColor: '#444' }, 
@@ -429,6 +436,7 @@ sectionTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold', marginBottom: 1
 orderCard: { backgroundColor: 'rgba(15, 15, 20, 0.9)', borderRadius: 18, padding: 18, marginBottom: 15, borderWidth: 1, borderColor: '#333' }, 
 orderHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }, 
 orderCats: { color: '#FFD700', fontSize: 10, fontWeight: 'bold' }, 
+orderDate: { color: '#666', fontSize: 11, fontWeight: '500' }, // СТИЛЬ ДЛЯ ДАТИ
 viewsBadge: { flexDirection: 'row', alignItems: 'center', gap: 5 }, 
 viewsText: { color: '#00BFFF', fontSize: 12 }, 
 orderTitle: { color: '#FFF', fontSize: 16, fontWeight: 'bold' }, 
